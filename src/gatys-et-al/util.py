@@ -25,21 +25,22 @@ def transfer_style_to_content(
 
     return deprocess(generated_image)
 
+
 def setup_gatys_model(pooling="avg"):
     model = tf.keras.applications.vgg19.VGG19(include_top=False, weights="imagenet", pooling=pooling)
     model.trainable = False
     return model, tf.keras.applications.vgg19.preprocess_input, vgg19_deprocess
 
 
-def calc_total_loss(generated_image, content_image, style_image, alpha, beta):
+def calc_total_loss(generated_image, content_image, style_image, model, alpha, beta):
     pass
 
 
-def calc_content_loss(generated_image, content_image):
+def calc_content_loss(generated_image, content_image, model):
     pass
 
 
-def calc_style_loss(generated_image, style_image, layer_weights):
+def calc_style_loss(generated_image, style_image, model, layer_weights):
     pass
 
 
@@ -52,9 +53,11 @@ def load_image(image_path):
 
 
 def create_white_noise_image(shape):
-    return np.random.randn(*shape)
+    """Create a uniformly random white noise image, with values in range [-128, 127) with the given shape."""
+    return (np.random.rand(*shape)) * 255 - 128
 
 def vgg19_deprocess(image):
+    """Does the inverse of the VGG19 preprocessing step on the given image."""
     mean = [[[103.939, 116.779, 123.67]]]  # Source: https://github.com/keras-team/keras-applications/blob/master/keras_applications/imagenet_utils.py#L61C9-L61C42
     image += mean
-    tfio.experimental.color.bgr_to_rgb(image)
+    return tfio.experimental.color.bgr_to_rgb(image)
