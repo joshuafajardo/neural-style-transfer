@@ -1,4 +1,5 @@
 from util import *
+import tensorflow as tf
 import numpy as np
 import matplotlib as plt
 
@@ -7,6 +8,9 @@ STYLE_IMAGE_PATH = "../../data/style/starry-night.jpg"
 
 content_image = load_image(CONTENT_IMAGE_PATH)
 style_image = load_image(STYLE_IMAGE_PATH)
+
+content_image = tf.image.resize(content_image, (768 // 2, 1024 // 2))
+style_image = tf.image.resize(style_image, (416 // 2, 525 // 2))
 factory = StyledImageFactory(content_image, style_image)
 generated_image, losses = factory.generate_styled_image()
 plt.imshow(generated_image)

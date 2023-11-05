@@ -11,6 +11,8 @@ import tensorflow_io as tfio
 import numpy as np
 import matplotlib as plt
 
+from tqdm import tqdm
+
 
 IMAGENET_MEAN = [[[103.939, 116.779, 123.67]]]  # Source: https://github.com/keras-team/keras-applications/blob/master/keras_applications/imagenet_utils.py#L61C9-L61C42
 FLOAT_TYPE = tf.keras.backend.floatx()
@@ -99,9 +101,11 @@ class StyledImageFactory():
         generated_image = tf.Variable(preprocessed_image)
         losses = [self.calc_total_loss(generated_image)]
 
-        for epoch in range(num_epochs):
+        # Optimize the image.
+        for epoch in tqdm(range(num_epochs)):
             loss = self.run_optimizer_step(generated_image)
             losses.append(loss)
+            print(loss)
 
         return self.deprocess_image(generated_image), losses
 
@@ -109,6 +113,8 @@ class StyledImageFactory():
     def run_optimizer_step(self, image):
         with tf.GradientTape() as tape:
             loss = self.calc_total_loss(image)
+        # gradient = tape.gradient(loss, image)
+        # self.optimizer.apply_gradients([(gradient, image)])
         self.optimizer.minimize(loss, [image], tape=tape)
         return loss
 
@@ -125,22 +131,24 @@ class StyledImageFactory():
         num_layers = len(generated_content_maps)
         generated_reps = self.get_content_reps(generated_content_maps)
 
-        contributions = np.zeros(num_layers, dtype=FLOAT_TYPE)
+        contributions_list = []
         for layer in range(num_layers):
             generated_rep = generated_reps[layer]
             target_rep = self.target_content_reps[layer]
             
             contribution = 0.5 * tf.math.reduce_sum(
                 (generated_rep - target_rep) ** 2)
-            contributions[layer] = tf.get_static_value(contribution)
-        return tf.tensordot(self.content_layer_weights, contributions, 1)
+            contributions_list.append(contribution)
+        contributions_tensor = tf.stack(contributions_list)
+        return tf.tensordot(self.content_layer_weights,
+                            contributions_tensor, 1)
 
     @tf.function()
     def calc_style_loss(self, generated_style_maps):
         num_layers = len(generated_style_maps)
         generated_reps = self.get_style_reps(generated_style_maps)
 
-        contributions = np.zeros(num_layers, dtype=FLOAT_TYPE)
+        contributions_list = []
         for layer in range(num_layers):
             generated_map = generated_style_maps[layer]
             (_, map_height, map_width, num_maps) = generated_map.shape
@@ -152,8 +160,9 @@ class StyledImageFactory():
             factor = 1 / (4 * (num_maps ** 2) * (map_size ** 2))
             contribution = factor * tf.math.reduce_sum(
                 (generated_rep - target_rep) ** 2)
-            contributions[layer] = tf.get_static_value(contribution)
-        return tf.tensordot(self.style_layer_weights, contributions, 1)
+            contributions_list.append(contribution)
+        contributions_tensor = tf.stack(contributions_list)
+        return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
 
     @tf.function()
     def get_content_reps(self, feature_maps):
@@ -170,7 +179,6 @@ class StyledImageFactory():
         reps = []
         for map in feature_maps:
             reps.append(self.calc_gram_matrix(map))
-            print(reps[-1].shape)
         return reps
         
     @staticmethod
