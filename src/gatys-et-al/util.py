@@ -30,7 +30,8 @@ class StyledImageFactory():
                  content_layer_weights=None,
                  style_layer_weights=None,
                  content_loss_weight=10e-3,
-                 style_loss_weight=1):
+                 style_loss_weight=1,
+                 learning_rate=0.01):
         """Initialize the StyledImageFactory."""
         self.__setup_model(content_layers, style_layers)
 
@@ -44,6 +45,10 @@ class StyledImageFactory():
         self.content_loss_weight = content_loss_weight
         self.style_loss_weight = style_loss_weight
 
+        self.learning_rate = learning_rate
+        self.optimizer = tf.keras.optimizers.experimental.SGD(
+            learning_rate=learning_rate)
+
         # Set up the target representations.
         content_model_out = self.model(self.preprocess(content_image))
         style_model_out = self.model(self.preprocess(style_image))
@@ -53,25 +58,6 @@ class StyledImageFactory():
 
         self.target_content_reps = self.get_content_reps(content_maps)
         self.target_style_reps = self.get_style_reps(style_maps)
-
-    def generate_styled_image(self, initial_image=None, num_epochs=1000,
-                              learning_rate=0.01, clip_between_steps=True):
-        """
-        Note: While the original paper doesn't mention anything about
-        clipping the image between optimizer steps, we do it in order
-        to improve the optimization.
-        """  # TODO: Improve the wording
-        # Initialize the input to the model.
-        if initial_image is None:
-            initial_image = self.create_white_noise_image(
-                self.content_image.shape)
-        preprocessed_image = self.preprocess(initial_image)
-        generated_image = tf.Variable(preprocessed_image)
-
-        optimizer = tf.keras.optimizers.experimental.SGD(
-            learning_rate=learning_rate)
-        # TODO: run gradient descent on the image.
-        return self.deprocess_image(generated_image)
 
     def __setup_model(self, content_layers, style_layers):
         """
@@ -93,12 +79,37 @@ class StyledImageFactory():
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
-    @tf.function()
-    def run_optimizer_step(image):
-        pass
+    def generate_styled_image(self, initial_image=None, num_epochs=1000,
+                              clip_between_steps=True):
+        """
+        Note: While the original paper doesn't mention anything about
+        clipping the image between optimizer steps, we do it in order
+        to improve the optimization.
+        """  # TODO: Improve the wording
+        # Initialize the input to the model.
+        if initial_image is None:
+            initial_image = self.create_white_noise_image(
+                self.content_image.shape)
+        preprocessed_image = self.preprocess(initial_image)
+        generated_image = tf.Variable(preprocessed_image)
+        losses = [self.calc_total_loss(generated_image)]
+
+        for epoch in range(num_epochs):
+            loss = self.run_optimizer_step(generated_image)
+            losses.append(loss)
+
+        return self.deprocess_image(generated_image), losses
 
     @tf.function()
-    def calc_total_loss(self, model_output):
+    def run_optimizer_step(self, image):
+        with tf.GradientTape() as tape:
+            loss = self.calc_total_loss(image)
+        self.optimizer.minimize(loss, [image], tape=tape)
+        return loss
+
+    @tf.function()
+    def calc_total_loss(self, image):
+        model_output = self.model(image)
         content_loss = self.calc_content_loss(model_output["content_maps"])
         style_loss = self.calc_style_loss(model_output["style_maps"])
         return (self.content_loss_weight * content_loss) \
