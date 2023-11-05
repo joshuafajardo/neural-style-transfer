@@ -27,12 +27,16 @@ class StyledImageFactory():
     def __init__(self, content_image, style_image,
                  content_layers=DEFAULT_CONTENT_LAYERS,
                  style_layers=DEFAULT_STYLE_LAYERS,
+                 content_layer_weights=None,
                  style_layer_weights=None,
                  content_loss_weight=10e-3,
                  style_loss_weight=1):
         """Initialize the StyledImageFactory."""
         self.__setup_model(content_layers, style_layers)
 
+        if content_layer_weights is None:
+            content_layer_weights = [1] * len(content_layers)
+        self.content_layer_weights = tf.convert_to_tensor(content_layer_weights)
         if style_layer_weights is None:
             style_layer_weights = [1] * len(style_layers)
         self.style_layer_weights = tf.convert_to_tensor(style_layer_weights)
@@ -94,12 +98,23 @@ class StyledImageFactory():
         pass
 
     @tf.function()
-    def calc_total_loss():
-        pass
+    def calc_total_loss(self, model_output):
+        content_loss = self.calc_content_loss(model_output["content_maps"])
+        style_loss = self.calc_style_loss(model_output["style_maps"])
+        return (self.content_loss_weight * content_loss) \
+            + (self.style_loss_weight * style_loss)
 
     @tf.function()
-    def calc_content_loss():
-        pass
+    def calc_content_loss(self, generated_content_reps):
+        num_layers = len(generated_content_reps)
+        contributions = tf.zeros(num_layers)
+        for layer in num_layers:
+            generated_rep = generated_content_reps[layer]
+            target_rep = self.target_content_reps[layer]
+            
+            contributions[layer] = 0.5 * tf.math.reduce_sum(
+                (generated_rep - target_rep) ** 2)
+        return tf.tensordot(self.content_layer_weights, contributions)
 
     @tf.function()
     def calc_style_loss(self, generated_style_reps):
