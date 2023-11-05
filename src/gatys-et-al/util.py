@@ -9,7 +9,7 @@ __version__ = "0.1.0"
 import tensorflow as tf
 import tensorflow_io as tfio
 import numpy as np
-import matplotlib as plt
+import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
@@ -34,7 +34,7 @@ class StyledImageFactory():
                  style_layer_weights=None,
                  content_loss_weight=10e-3,
                  style_loss_weight=1,
-                 learning_rate=0.01):
+                 learning_rate=0.00001):
         """Initialize the StyledImageFactory."""
         self.__setup_model(content_layers, style_layers)
 
@@ -107,7 +107,7 @@ class StyledImageFactory():
             losses.append(loss)
             print(loss)
 
-        return self.deprocess_image(generated_image), losses
+        return self.deprocess(generated_image), losses
 
     @tf.function()
     def run_optimizer_step(self, image):
@@ -204,15 +204,16 @@ class StyledImageFactory():
     
     @staticmethod
     def preprocess(image):
-        return tf.keras.applications.vgg19.preprocess_input(image)
+        image = tf.keras.applications.vgg19.preprocess_input(image)
+        return tf.expand_dims(image, axis=0)
     
     @staticmethod
     def deprocess(image):
-        image += IMAGENET_MEAN
-        image = np.clip(image, 0, 255)
+        image = image + IMAGENET_MEAN
+        image = tf.clip_by_value(image, 0, 255)
+        image = tf.squeeze(image, [0])
         return tfio.experimental.color.bgr_to_rgb(image)
 
 def load_image(image_path):
     image = tf.keras.utils.load_img(image_path)
-    image_as_array = tf.keras.utils.img_to_array(image)
-    return tf.expand_dims(image_as_array, axis=0)
+    return tf.keras.utils.img_to_array(image)
