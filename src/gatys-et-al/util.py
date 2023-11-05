@@ -13,6 +13,7 @@ import matplotlib as plt
 
 
 IMAGENET_MEAN = [[[103.939, 116.779, 123.67]]]  # Source: https://github.com/keras-team/keras-applications/blob/master/keras_applications/imagenet_utils.py#L61C9-L61C42
+FLOAT_TYPE = tf.keras.backend.floatx()
 
 class StyledImageFactory():
     DEFAULT_CONTENT_LAYERS = ['block4_conv2'] 
@@ -39,10 +40,11 @@ class StyledImageFactory():
         self.style_image = style_image
 
         if content_layer_weights is None:
-            content_layer_weights = [1] * len(content_layers)
-        self.content_layer_weights = tf.convert_to_tensor(content_layer_weights)
+            content_layer_weights = [1.0] * len(content_layers)
+        self.content_layer_weights = tf.convert_to_tensor(
+            content_layer_weights)
         if style_layer_weights is None:
-            style_layer_weights = [1] * len(style_layers)
+            style_layer_weights = [1.0] * len(style_layers)
         self.style_layer_weights = tf.convert_to_tensor(style_layer_weights)
 
         self.content_loss_weight = content_loss_weight
@@ -119,30 +121,39 @@ class StyledImageFactory():
             + (self.style_loss_weight * style_loss)
 
     @tf.function()
-    def calc_content_loss(self, generated_content_reps):
-        num_layers = len(generated_content_reps)
-        contributions = tf.zeros(num_layers)
+    def calc_content_loss(self, generated_content_maps):
+        num_layers = len(generated_content_maps)
+        generated_reps = self.get_content_reps(generated_content_maps)
+
+        contributions = np.zeros(num_layers, dtype=FLOAT_TYPE)
         for layer in range(num_layers):
-            generated_rep = generated_content_reps[layer]
+            generated_rep = generated_reps[layer]
             target_rep = self.target_content_reps[layer]
             
-            contributions[layer] = 0.5 * tf.math.reduce_sum(
+            contribution = 0.5 * tf.math.reduce_sum(
                 (generated_rep - target_rep) ** 2)
-        return tf.tensordot(self.content_layer_weights, contributions)
+            contributions[layer] = tf.get_static_value(contribution)
+        return tf.tensordot(self.content_layer_weights, contributions, 1)
 
     @tf.function()
-    def calc_style_loss(self, generated_style_reps):
-        num_layers = len(generated_style_reps)
-        contributions = tf.zeros(num_layers)
+    def calc_style_loss(self, generated_style_maps):
+        num_layers = len(generated_style_maps)
+        generated_reps = self.get_style_reps(generated_style_maps)
+
+        contributions = np.zeros(num_layers, dtype=FLOAT_TYPE)
         for layer in range(num_layers):
-            generated_rep = generated_style_reps[layer]
+            generated_map = generated_style_maps[layer]
+            (_, map_height, map_width, num_maps) = generated_map.shape
+            map_size = map_height * map_width
+
+            generated_rep = generated_reps[layer]
             target_rep = self.target_style_reps[layer]
-            num_maps, map_size = generated_rep.shape
 
             factor = 1 / (4 * (num_maps ** 2) * (map_size ** 2))
-            contributions[layer] = factor * tf.math.reduce_sum(
+            contribution = factor * tf.math.reduce_sum(
                 (generated_rep - target_rep) ** 2)
-        return tf.tensordot(self.style_layer_weights, contributions)
+            contributions[layer] = tf.get_static_value(contribution)
+        return tf.tensordot(self.style_layer_weights, contributions, 1)
 
     @tf.function()
     def get_content_reps(self, feature_maps):
@@ -159,13 +170,21 @@ class StyledImageFactory():
         reps = []
         for map in feature_maps:
             reps.append(self.calc_gram_matrix(map))
+            print(reps[-1].shape)
         return reps
         
     @staticmethod
     @tf.function()
     def calc_gram_matrix(feature_map):
-        return tf.matmul(feature_map, feature_map,
-                         transpose_b=True)
+        # In the paper, the feature map for layer l has shape (N_l, M_l), where
+        # N_l is the number of feature maps, and M_l is the height * width of
+        # the map.
+        # Our actual feature maps have shape (1, height, width, N_l).
+        # Therefore, the steps we take here are slightly different.
+        feature_map_T = tf.transpose(feature_map, [0, 3, 1, 2])
+        gram_matrix = tf.tensordot(
+            feature_map_T, feature_map, [[2, 3], [1, 2]])
+        return tf.squeeze(gram_matrix, [0, 2])
 
     @staticmethod
     def create_white_noise_image(shape):
