@@ -35,6 +35,9 @@ class StyledImageFactory():
         """Initialize the StyledImageFactory."""
         self.__setup_model(content_layers, style_layers)
 
+        self.content_image = content_image
+        self.style_image = style_image
+
         if content_layer_weights is None:
             content_layer_weights = [1] * len(content_layers)
         self.content_layer_weights = tf.convert_to_tensor(content_layer_weights)
@@ -70,8 +73,8 @@ class StyledImageFactory():
         vgg_model.trainable = False
 
         # "maps" as in "feature maps"
-        content_maps = [vgg_model.get_layer(layer) for layer in content_layers]
-        style_maps = [vgg_model.get_layer(layer) for layer in style_layers]
+        content_maps = [vgg_model.get_layer(layer).output for layer in content_layers]
+        style_maps = [vgg_model.get_layer(layer).output for layer in style_layers]
         outputs = {
             "content_maps": content_maps,
             "style_maps": style_maps
@@ -119,7 +122,7 @@ class StyledImageFactory():
     def calc_content_loss(self, generated_content_reps):
         num_layers = len(generated_content_reps)
         contributions = tf.zeros(num_layers)
-        for layer in num_layers:
+        for layer in range(num_layers):
             generated_rep = generated_content_reps[layer]
             target_rep = self.target_content_reps[layer]
             
@@ -131,7 +134,7 @@ class StyledImageFactory():
     def calc_style_loss(self, generated_style_reps):
         num_layers = len(generated_style_reps)
         contributions = tf.zeros(num_layers)
-        for layer in num_layers:
+        for layer in range(num_layers):
             generated_rep = generated_style_reps[layer]
             target_rep = self.target_style_reps[layer]
             num_maps, map_size = generated_rep.shape
@@ -158,12 +161,13 @@ class StyledImageFactory():
             reps.append(self.calc_gram_matrix(map))
         return reps
         
-
+    @staticmethod
     @tf.function()
     def calc_gram_matrix(feature_map):
         return tf.matmul(feature_map, feature_map,
                          transpose_b=True)
 
+    @staticmethod
     def create_white_noise_image(shape):
         """
         Create a uniformly random white noise image, with values in range
@@ -171,13 +175,17 @@ class StyledImageFactory():
         """
         return (np.random.rand(*shape)) * 255 - 128
     
+    @staticmethod
     def preprocess(image):
         return tf.keras.applications.vgg19.preprocess_input(image)
     
+    @staticmethod
     def deprocess(image):
         image += IMAGENET_MEAN
         image = np.clip(image, 0, 255)
         return tfio.experimental.color.bgr_to_rgb(image)
 
 def load_image(image_path):
-    return tf.keras.utils.load_img(image_path)
+    image = tf.keras.utils.load_img(image_path)
+    image_as_array = tf.keras.utils.img_to_array(image)
+    return tf.expand_dims(image_as_array, axis=0)
