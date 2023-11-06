@@ -39,6 +39,7 @@ class StyledImageFactory():
         self.__setup_model(content_layers, style_layers)
 
         self.output_shape = content_image.shape
+        style_image = tf.image.resize(style_image, (self.output_shape[:2]))
 
         if content_layer_weights is None:
             num_content_layers = len(content_layers)
@@ -55,8 +56,6 @@ class StyledImageFactory():
         self.style_loss_weight = style_loss_weight
 
         self.learning_rate = learning_rate
-        # self.optimizer = tf.keras.optimizers.experimental.SGD(
-        #     learning_rate=learning_rate)
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=learning_rate)
 
@@ -91,7 +90,7 @@ class StyledImageFactory():
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
     def generate_styled_image(self, initial_image=None, num_epochs=1000,
-                              clip_between_steps=True):
+                              clip_between_steps=False):
         """
         Note: While the original paper doesn't mention anything about
         clipping the image between optimizer steps, we do it in order
@@ -104,21 +103,16 @@ class StyledImageFactory():
         preprocessed_image = self.preprocess(initial_image)
         generated_image = tf.Variable(preprocessed_image)
 
-        total_loss, content_loss, style_loss = self.calc_total_loss(
+        losses = self.calc_losses(
             generated_image)
-        total_losses = [total_loss]
-        content_losses = [content_loss]
-        style_losses = [style_loss]
-        losses = [total_losses, content_losses, style_losses]
+        losses_across_epochs = [losses]
 
         # Optimize the image.
-        for epoch in tqdm(range(num_epochs)):
-            total_loss, content_loss, style_loss = self.run_optimizer_step(
+        for _ in tqdm(range(num_epochs)):
+            losses = self.run_optimizer_step(
                 generated_image)
-            total_losses.append(total_loss)
-            content_losses.append(content_loss)
-            style_losses.append(style_loss)
-            print(total_loss)
+            losses_across_epochs.append(losses)
+            print(losses["total"])
 
             if clip_between_steps:
                 clipped = tf.clip_by_value(generated_image, 0, 255)
@@ -129,21 +123,20 @@ class StyledImageFactory():
     @tf.function()
     def run_optimizer_step(self, image):
         with tf.GradientTape() as tape:
-            total_loss, content_loss, style_loss = self.calc_total_loss(image)
-        # gradient = tape.gradient(loss, image)
-        # self.optimizer.apply_gradients([(gradient, image)])
-        self.optimizer.minimize(total_loss, [image], tape=tape)
-        return total_loss, content_loss, style_loss
+            losses = self.calc_losses(image)
+        self.optimizer.minimize(losses["total"], [image], tape=tape)
+        return losses
 
     @tf.function()
-    def calc_total_loss(self, image):
+    def calc_losses(self, image):
+        losses = {}
         model_output = self.model(image)
-        content_loss = self.calc_content_loss(model_output["content_maps"])
-        style_loss = self.calc_style_loss(model_output["style_maps"])
-        total_loss = (self.content_loss_weight * content_loss) \
-            + (self.style_loss_weight * style_loss), 
-        # Not necessary to return all 3, but helps with graphing.
-        return total_loss, content_loss, style_loss
+        losses["content"] = self.calc_content_loss(model_output["content_maps"])
+        losses["style"] = self.calc_style_loss(model_output["style_maps"])
+        losses["total"] = (self.content_loss_weight * losses["content"]) \
+            + (self.style_loss_weight * losses["style"]) 
+        # Not necessary to return all 3, but helps with debugging and graphing.
+        return losses
 
     @tf.function()
     def calc_content_loss(self, generated_content_maps):
@@ -185,16 +178,10 @@ class StyledImageFactory():
 
     @tf.function()
     def get_content_reps(self, feature_maps):
-        """
-        Assumes that self.model is already set.
-        """
         return feature_maps
 
     @tf.function()
     def get_style_reps(self, feature_maps):
-        """
-        Assumes that self.model is already set.
-        """
         reps = []
         for map in feature_maps:
             reps.append(self.calc_gram_matrix(map))
