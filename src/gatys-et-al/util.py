@@ -22,8 +22,8 @@ class StyledImageFactory():
     DEFAULT_STYLE_LAYERS = [
         'block1_conv1',
         'block2_conv1',
-        'block3_conv1', 
-        'block4_conv1', 
+        'block3_conv1',
+        'block4_conv1',
         'block5_conv1'
     ]
 
@@ -115,10 +115,21 @@ class StyledImageFactory():
             print(losses["total"])
 
             if clip_between_steps:
-                clipped = tf.clip_by_value(generated_image, 0, 255)
+                clipped = self.clip_to_valid_range(generated_image)
                 generated_image.assign(clipped)
 
         return self.deprocess(generated_image), losses
+    
+    @staticmethod
+    @tf.function()
+    def clip_to_valid_range(image):
+        mean = tf.reshape(IMAGENET_MEAN, (1, 1, 1, 3))
+        mean = tf.cast(mean, image.dtype)
+        lower_bound = 0 - mean
+        upper_bound = 255 - mean
+        image = tf.maximum(image, lower_bound)
+        image = tf.minimum(image, upper_bound)
+        return image
 
     @tf.function()
     def run_optimizer_step(self, image):
