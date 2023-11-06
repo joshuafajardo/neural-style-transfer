@@ -14,7 +14,7 @@ import matplotlib.pyplot as plt
 from tqdm import tqdm
 
 
-IMAGENET_MEAN = [[[103.939, 116.779, 123.67]]]  # Source: https://github.com/keras-team/keras-applications/blob/master/keras_applications/imagenet_utils.py#L61C9-L61C42
+IMAGENET_MEAN = [103.939, 116.779, 123.67]  # Source: https://github.com/keras-team/keras-applications/blob/master/keras_applications/imagenet_utils.py#L61C9-L61C42
 FLOAT_TYPE = tf.keras.backend.floatx()
 
 class StyledImageFactory():
@@ -34,26 +34,30 @@ class StyledImageFactory():
                  style_layer_weights=None,
                  content_loss_weight=10e-3,
                  style_loss_weight=1,
-                 learning_rate=0.00001):
+                 learning_rate=0.001):
         """Initialize the StyledImageFactory."""
         self.__setup_model(content_layers, style_layers)
 
-        self.content_image = content_image
-        self.style_image = style_image
+        self.output_shape = content_image.shape
 
         if content_layer_weights is None:
-            content_layer_weights = [1.0] * len(content_layers)
+            num_content_layers = len(content_layers)
+            content_layer_weights = [1 / num_content_layers] \
+                * num_content_layers
         self.content_layer_weights = tf.convert_to_tensor(
             content_layer_weights)
         if style_layer_weights is None:
-            style_layer_weights = [1.0] * len(style_layers)
+            num_style_layers = len(style_layers)
+            style_layer_weights = [1 / num_style_layers] * num_style_layers
         self.style_layer_weights = tf.convert_to_tensor(style_layer_weights)
 
         self.content_loss_weight = content_loss_weight
         self.style_loss_weight = style_loss_weight
 
         self.learning_rate = learning_rate
-        self.optimizer = tf.keras.optimizers.experimental.SGD(
+        # self.optimizer = tf.keras.optimizers.experimental.SGD(
+        #     learning_rate=learning_rate)
+        self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=learning_rate)
 
         # Set up the target representations.
@@ -96,35 +100,50 @@ class StyledImageFactory():
         # Initialize the input to the model.
         if initial_image is None:
             initial_image = self.create_white_noise_image(
-                self.content_image.shape)
+                self.output_shape)
         preprocessed_image = self.preprocess(initial_image)
         generated_image = tf.Variable(preprocessed_image)
-        losses = [self.calc_total_loss(generated_image)]
+
+        total_loss, content_loss, style_loss = self.calc_total_loss(
+            generated_image)
+        total_losses = [total_loss]
+        content_losses = [content_loss]
+        style_losses = [style_loss]
+        losses = [total_losses, content_losses, style_losses]
 
         # Optimize the image.
         for epoch in tqdm(range(num_epochs)):
-            loss = self.run_optimizer_step(generated_image)
-            losses.append(loss)
-            print(loss)
+            total_loss, content_loss, style_loss = self.run_optimizer_step(
+                generated_image)
+            total_losses.append(total_loss)
+            content_losses.append(content_loss)
+            style_losses.append(style_loss)
+            print(total_loss)
+
+            if clip_between_steps:
+                clipped = tf.clip_by_value(generated_image, 0, 255)
+                generated_image.assign(clipped)
 
         return self.deprocess(generated_image), losses
 
     @tf.function()
     def run_optimizer_step(self, image):
         with tf.GradientTape() as tape:
-            loss = self.calc_total_loss(image)
+            total_loss, content_loss, style_loss = self.calc_total_loss(image)
         # gradient = tape.gradient(loss, image)
         # self.optimizer.apply_gradients([(gradient, image)])
-        self.optimizer.minimize(loss, [image], tape=tape)
-        return loss
+        self.optimizer.minimize(total_loss, [image], tape=tape)
+        return total_loss, content_loss, style_loss
 
     @tf.function()
     def calc_total_loss(self, image):
         model_output = self.model(image)
         content_loss = self.calc_content_loss(model_output["content_maps"])
         style_loss = self.calc_style_loss(model_output["style_maps"])
-        return (self.content_loss_weight * content_loss) \
-            + (self.style_loss_weight * style_loss)
+        total_loss = (self.content_loss_weight * content_loss) \
+            + (self.style_loss_weight * style_loss), 
+        # Not necessary to return all 3, but helps with graphing.
+        return total_loss, content_loss, style_loss
 
     @tf.function()
     def calc_content_loss(self, generated_content_maps):
@@ -198,9 +217,9 @@ class StyledImageFactory():
     def create_white_noise_image(shape):
         """
         Create a uniformly random white noise image, with values in range
-        [-128, 127) and with the given shape.
+        [0, 255) and with the given shape.
         """
-        return (np.random.rand(*shape)) * 255 - 128
+        return np.random.rand(*shape) * 255 
     
     @staticmethod
     def preprocess(image):
@@ -209,9 +228,11 @@ class StyledImageFactory():
     
     @staticmethod
     def deprocess(image):
-        image = image + IMAGENET_MEAN
-        image = tf.clip_by_value(image, 0, 255)
         image = tf.squeeze(image, [0])
+        mean = tf.reshape(IMAGENET_MEAN, (1, 1, 3))
+        mean = tf.cast(mean, image.dtype)
+        image = image + mean
+        image = tf.clip_by_value(image, 0, 255)
         return tfio.experimental.color.bgr_to_rgb(image)
 
 def load_image(image_path):
