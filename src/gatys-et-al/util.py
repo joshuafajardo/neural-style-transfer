@@ -32,7 +32,7 @@ class StyledImageFactory():
                  style_layers=DEFAULT_STYLE_LAYERS,
                  content_layer_weights=None,
                  style_layer_weights=None,
-                 content_loss_weight=10e-3,
+                 content_loss_weight=10e-4,
                  style_loss_weight=1,
                  learning_rate=0.001):
         """Initialize the StyledImageFactory."""
@@ -112,7 +112,6 @@ class StyledImageFactory():
             losses = self.run_optimizer_step(
                 generated_image)
             losses_across_epochs.append(losses)
-            print(losses["total"])
 
             if clip_between_steps:
                 clipped = self.clip_to_valid_range(generated_image)
