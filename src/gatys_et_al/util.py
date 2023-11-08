@@ -234,7 +234,8 @@ class StyledImageFactory():
         Create a random white noise image with the given shape.
         """
         # Normal distribution; most values within [0-255] (~6 sigma).
-        return np.random.normal(loc=127, scale=45, size=shape)
+        image = np.random.normal(loc=127, scale=45, size=shape)
+        return tf.cast(image, FLOAT_TYPE)
     
     @staticmethod
     def preprocess(image):
