@@ -11,7 +11,7 @@ with tf.device("/GPU:0"):
     style_image = load_image(STYLE_IMAGE_PATH)
     content_image = tf.image.resize(content_image, (768 // 3, 1024 // 3))
 
-    factory = StyledImageFactory(content_image, style_image, learning_rate=8)
+    factory = StyledImageFactory(content_image, style_image)
     generated_image, losses = factory.generate_styled_image(num_epochs=3000, clip_between_steps=True)
 
 print(generated_image)

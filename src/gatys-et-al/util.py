@@ -9,7 +9,6 @@ __version__ = "0.1.0"
 import tensorflow as tf
 import tensorflow_io as tfio
 import numpy as np
-import matplotlib.pyplot as plt
 
 from tqdm import tqdm
 
@@ -34,7 +33,7 @@ class StyledImageFactory():
                  style_layer_weights=None,
                  content_loss_weight=10e-4,
                  style_loss_weight=1,
-                 learning_rate=0.001):
+                 learning_rate=8):
         """Initialize the StyledImageFactory."""
         self.__setup_model(content_layers, style_layers)
 
@@ -90,7 +89,7 @@ class StyledImageFactory():
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
     def generate_styled_image(self, initial_image=None, num_epochs=1000,
-                              clip_between_steps=False):
+                              clip_between_steps=True):
         """
         Note: While the original paper doesn't mention anything about
         clipping the image between optimizer steps, we do it in order
