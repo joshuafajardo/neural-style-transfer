@@ -88,7 +88,7 @@ class StyledImageFactory():
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
-    @tf.function(reduce_tracing=True)
+    @tf.function(reduce_retracing=True)
     def generate_styled_image(self, initial_image=None, num_epochs=1000,
                               clip_between_steps=True):
         """
@@ -208,7 +208,7 @@ class StyledImageFactory():
         Create a random white noise image with the given shape.
         """
         # Normal distribution; most values within [0-255] (~6 sigma).
-        return np.random.randn(loc=127, scale=45)
+        return np.random.normal(loc=127, scale=45, size=shape)
     
     @staticmethod
     def preprocess(image):
