@@ -88,6 +88,7 @@ class StyledImageFactory():
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
+    @tf.function
     def generate_styled_image(self, initial_image=None, num_epochs=1000,
                               clip_between_steps=True):
         """
@@ -119,7 +120,6 @@ class StyledImageFactory():
         return self.deprocess(generated_image), losses
     
     @staticmethod
-    @tf.function()
     def clip_to_valid_range(image):
         mean = tf.reshape(IMAGENET_MEAN, (1, 1, 1, 3))
         mean = tf.cast(mean, image.dtype)
@@ -129,14 +129,12 @@ class StyledImageFactory():
         image = tf.minimum(image, upper_bound)
         return image
 
-    @tf.function()
     def run_optimizer_step(self, image):
         with tf.GradientTape() as tape:
             losses = self.calc_losses(image)
         self.optimizer.minimize(losses["total"], [image], tape=tape)
         return losses
 
-    @tf.function()
     def calc_losses(self, image):
         losses = {}
         model_output = self.model(image)
@@ -147,7 +145,6 @@ class StyledImageFactory():
         # Not necessary to return all 3, but helps with debugging and graphing.
         return losses
 
-    @tf.function()
     def calc_content_loss(self, generated_content_maps):
         num_layers = len(generated_content_maps)
         generated_reps = self.get_content_reps(generated_content_maps)
@@ -164,7 +161,6 @@ class StyledImageFactory():
         return tf.tensordot(self.content_layer_weights,
                             contributions_tensor, 1)
 
-    @tf.function()
     def calc_style_loss(self, generated_style_maps):
         num_layers = len(generated_style_maps)
         generated_reps = self.get_style_reps(generated_style_maps)
@@ -185,11 +181,9 @@ class StyledImageFactory():
         contributions_tensor = tf.stack(contributions_list)
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
 
-    @tf.function()
     def get_content_reps(self, feature_maps):
         return feature_maps
 
-    @tf.function()
     def get_style_reps(self, feature_maps):
         reps = []
         for map in feature_maps:
@@ -197,7 +191,6 @@ class StyledImageFactory():
         return reps
         
     @staticmethod
-    @tf.function()
     def calc_gram_matrix(feature_map):
         # In the paper, the feature map for layer l has shape (N_l, M_l), where
         # N_l is the number of feature maps, and M_l is the height * width of
