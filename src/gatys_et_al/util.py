@@ -212,18 +212,24 @@ class StyledImageFactory():
     @staticmethod
     def create_white_noise_image(shape):
         """
-        Create a uniformly random white noise image, with values in range
-        [0, 255) and with the given shape.
+        Create a random white noise image with the given shape.
         """
-        return np.random.rand(*shape) * 255 
+        # Normal distribution; most values within [0-255] (~6 sigma).
+        return np.random.randn(loc=127, scale=45)
     
     @staticmethod
     def preprocess(image):
+        """
+        Prepare the image to be processed by the factory.
+        """
         image = tf.keras.applications.vgg19.preprocess_input(image)
         return tf.expand_dims(image, axis=0)
     
     @staticmethod
     def deprocess(image):
+        """
+        Deprocess the generated intermediate image.
+        """
         image = tf.squeeze(image, [0])
         mean = tf.reshape(IMAGENET_MEAN, (1, 1, 3))
         mean = tf.cast(mean, image.dtype)
