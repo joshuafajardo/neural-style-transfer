@@ -88,7 +88,6 @@ class StyledImageFactory():
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
-    @tf.function(reduce_retracing=True)
     def generate_styled_image(self, initial_image=None, num_epochs=1000,
                               clip_between_steps=True):
         """
@@ -117,6 +116,15 @@ class StyledImageFactory():
                 generated_image.assign(clipped)
 
         return self.deprocess(generated_image), losses
+
+    @staticmethod
+    def create_white_noise_image(shape):
+        """
+        Create a random white noise image with the given shape.
+        """
+        # Normal distribution; most values within [0-255] (~6 sigma).
+        image = np.random.normal(loc=127, scale=45, size=shape)
+        return tf.cast(image, FLOAT_TYPE)
     
     @staticmethod
     def clip_to_valid_range(image):
@@ -131,6 +139,7 @@ class StyledImageFactory():
         image = tf.minimum(image, upper_bound)
         return image
 
+    @tf.function(reduce_retracing=True)
     def run_optimizer_step(self, image):
         """
         Run one optimization step on the image.
@@ -227,15 +236,6 @@ class StyledImageFactory():
         gram_matrix = tf.tensordot(
             feature_map_T, feature_map, [[2, 3], [1, 2]])
         return tf.squeeze(gram_matrix, [0, 2])
-
-    @staticmethod
-    def create_white_noise_image(shape):
-        """
-        Create a random white noise image with the given shape.
-        """
-        # Normal distribution; most values within [0-255] (~6 sigma).
-        image = np.random.normal(loc=127, scale=45, size=shape)
-        return tf.cast(image, FLOAT_TYPE)
     
     @staticmethod
     def preprocess(image):

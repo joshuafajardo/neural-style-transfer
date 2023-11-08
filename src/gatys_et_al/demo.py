@@ -12,7 +12,7 @@ with tf.device("/GPU:0"):
     content_image = tf.image.resize(content_image, (768 // 3, 1024 // 3))
 
     factory = StyledImageFactory(content_image, style_image)
-    generated_image, losses = factory.generate_styled_image(num_epochs=3000)
+    generated_image, losses = factory.generate_styled_image(num_epochs=1000)
 
 plt.imshow(tf.cast(generated_image, tf.int32))
 plt.show()
