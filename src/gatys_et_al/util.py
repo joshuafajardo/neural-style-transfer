@@ -88,7 +88,7 @@ class StyledImageFactory():
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
-    def generate_styled_image(self, initial_image=None, num_epochs=1000,
+    def generate_styled_image(self, initial_image=None, num_epochs=3000,
                               clip_between_steps=True):
         """
         Generates a new image, based on the content and style sources that were
