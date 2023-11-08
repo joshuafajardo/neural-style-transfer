@@ -88,7 +88,7 @@ class StyledImageFactory():
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
-    @tf.function
+    @tf.function(reduce_tracing=True)
     def generate_styled_image(self, initial_image=None, num_epochs=1000,
                               clip_between_steps=True):
         """
