@@ -41,6 +41,7 @@ class StyledImageFactory():
         self.output_shape = content_image.shape
         style_image = tf.image.resize(style_image, (self.output_shape[:2]))
 
+        # Set the layer weights
         if content_layer_weights is None:
             num_content_layers = len(content_layers)
             content_layer_weights = [1 / num_content_layers] \
@@ -52,9 +53,11 @@ class StyledImageFactory():
             style_layer_weights = [1 / num_style_layers] * num_style_layers
         self.style_layer_weights = tf.convert_to_tensor(style_layer_weights)
 
+        # Set the weights for content, style loss
         self.content_loss_weight = content_loss_weight
         self.style_loss_weight = style_loss_weight
 
+        # Set the optimizer
         self.learning_rate = learning_rate
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=learning_rate)
@@ -83,8 +86,8 @@ class StyledImageFactory():
             vgg_model = self.replace_max_pooling_with_avg_pooling(vgg_model)
 
         # "maps" as in "feature maps"
-        content_maps = [vgg_model.get_layer(layer).output for layer in content_layers]
-        style_maps = [vgg_model.get_layer(layer).output for layer in style_layers]
+        content_maps = [vgg_model.get_layer(layer).get_output_at(-1) for layer in content_layers]
+        style_maps = [vgg_model.get_layer(layer).get_output_at(-1) for layer in style_layers]
         outputs = {
             "content_maps": content_maps,
             "style_maps": style_maps
