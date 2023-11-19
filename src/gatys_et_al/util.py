@@ -33,9 +33,10 @@ class StyledImageFactory():
                  style_layer_weights=None,
                  content_loss_weight=10e-4,
                  style_loss_weight=1,
+                 pooling="avg",
                  learning_rate=8):
         """Initialize the StyledImageFactory."""
-        self.__setup_model(content_layers, style_layers)
+        self.__setup_model(content_layers, style_layers, pooling)
 
         self.output_shape = content_image.shape
         style_image = tf.image.resize(style_image, (self.output_shape[:2]))
@@ -68,15 +69,18 @@ class StyledImageFactory():
         self.target_content_reps = self.get_content_reps(content_maps)
         self.target_style_reps = self.get_style_reps(style_maps)
 
-    def __setup_model(self, content_layers, style_layers):
+    def __setup_model(self, content_layers, style_layers, pooling):
         """
         Sets up an internal "model", where the input is the image to be
         improved, and the output contains the activations (aka
         representations) of the specified content and style layers.
         """
         vgg_model = tf.keras.applications.vgg19.VGG19(
-            include_top=False, weights="imagenet", pooling="avg")
+            include_top=False, weights="imagenet")
         vgg_model.trainable = False
+
+        if pooling == "avg":
+            vgg_model = self.replace_max_pooling_with_avg_pooling(vgg_model)
 
         # "maps" as in "feature maps"
         content_maps = [vgg_model.get_layer(layer).output for layer in content_layers]
@@ -87,6 +91,33 @@ class StyledImageFactory():
         }
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
+    
+    @staticmethod
+    def replace_max_pooling_with_avg_pooling(model):
+        """
+        Creates a new model from the existing model, where the MaxPooling2D
+        layers are replaced with AveragePooling2D layers.
+
+        Average pooling allows for better gradient flow when optimizing
+        the output image.
+        """
+        # Inspiration from https://stackoverflow.com/q/54508800
+        prev_output = model.layers[0].output
+        for i in range(1, len(model.layers)):
+            original_layer = model.layers[i]
+            if isinstance(original_layer, tf.keras.layers.MaxPooling2D):
+                new_layer = tf.keras.layers.AveragePooling2D(
+                    pool_size=original_layer.pool_size,
+                    strides=original_layer.strides,
+                    padding=original_layer.padding,
+                    data_format=original_layer.data_format,
+                    name=original_layer.name,
+                )
+                prev_output = new_layer(prev_output)
+            else:
+                prev_output = original_layer(prev_output)
+        return tf.keras.models.Model(inputs=model.input, outputs=prev_output)
+        
     
     def generate_styled_image(self, initial_image=None, num_epochs=3000,
                               clip_between_steps=True):
