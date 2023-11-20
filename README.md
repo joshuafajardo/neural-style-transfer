@@ -25,8 +25,13 @@ Style".
 ## NST For Images
 This project is based on the paper that really kicked off the field of NST.
 My implementation has two main goals:
-1) **Stay as true as possible to the original implementation.**
-2) **Organize the logic in a way that is easily comprehensible**.
+1) **Stay as true as possible to the original implementation.** While there are
+some optimizations that we could apply to get smoother results (e.g. different
+way of computing style loss/gram matrix, or reducing noise with a total
+variation regularization term).
+2) **Organize the logic in a way that is easily comprehensible.** This includes
+organizing methods by descending levels of abstraction, following the stepdown
+rule from the book, Clean Code.
 
 
 ### Fun Findings
