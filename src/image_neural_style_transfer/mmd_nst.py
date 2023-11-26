@@ -160,8 +160,10 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 for i in range(map_size):
                     contribution += get_summed_kernel_vals(
                         generated_maps, generated_maps, i)
+                for i in range(map_size):
                     contribution += get_summed_kernel_vals(
                         target_maps, target_maps, i)
+                for i in range(map_size):
                     contribution -= 2 * get_summed_kernel_vals(
                         generated_maps, target_maps, i)
                 factor = 1 / (num_maps ** 2)
@@ -170,6 +172,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 factor = 1
             case Kernel.BATCH_NORM:
                 factor = 1 / num_maps
+        print("one iteration")
         return contribution
 
     def get_style_reps(self, feature_maps):
