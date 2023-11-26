@@ -100,6 +100,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         contributions_tensor = tf.stack(contributions_list)
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
     
+    @tf.autograph.experimental.do_not_convert
     def calc_normalized_mmd(self, generated_maps, target_maps):
         # We don't have enough memory to calculate the image_size x image_size
         # matrices (from Kernel calculations) directly. Therefore, we partition
@@ -117,7 +118,6 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             tf.reshape(generated_maps, simplified_shape))
         target_maps = tf.transpose(
             tf.reshape(target_maps, simplified_shape))
-        print("hello world")
 
         contribution = 0
         match self.kernel:
