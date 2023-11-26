@@ -149,6 +149,28 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 factor = 1 / num_maps  # From paper: Z_k^l
                 contribution *= factor
             case Kernel.POLY:
+                def get_summed_kernel_vals(x, y, partition_num, partition_size):
+                    """
+                    TODO: Add docstring
+                    """
+                    y_start = partition_num * partition_size
+                    y_end = (partition_num + 1) * partition_size
+                    if y_start >= y.shape[1]:
+                        return 0
+
+                    kernel_calcs = tf.linalg.matmul(
+                        x, y[:, y_start : y_end], transpose_a=True)
+                    return tf.math.reduce_sum(kernel_calcs ** 2)
+                    
+                # The last partition may be smaller.
+                partition_size = ceil(map_size / NUM_PARTITIONS)
+                for i in range(NUM_PARTITIONS):
+                    contribution += get_summed_kernel_vals(
+                        generated_maps, generated_maps, i, partition_size)
+                    contribution += get_summed_kernel_vals(
+                        target_maps, target_maps, i, partition_size)
+                    contribution -= 2 * get_summed_kernel_vals(
+                        generated_maps, target_maps, i, partition_size)
                 factor = 1 / (num_maps ** 2)
                 contribution *= factor
             case Kernel.GAUSSIAN:
