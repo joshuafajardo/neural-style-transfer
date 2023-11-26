@@ -100,7 +100,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         contributions_tensor = tf.stack(contributions_list)
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
     
-    @tf.autograph.experimental.do_not_convert
+    # @tf.autograph.experimental.do_not_convert
     def calc_normalized_mmd(self, generated_maps, target_maps):
         # We don't have enough memory to calculate the image_size x image_size
         # matrices (from Kernel calculations) directly. Therefore, we partition
@@ -159,16 +159,16 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     return tf.math.reduce_sum(kernel_calcs ** 2)
                     
                 for i in range(map_size):
-                    contribution += get_summed_kernel_vals(
+                    contribution = contribution + get_summed_kernel_vals(
                         generated_maps, generated_maps, i)
                 for i in range(map_size):
-                    contribution += get_summed_kernel_vals(
+                    contribution = contribution + get_summed_kernel_vals(
                         target_maps, target_maps, i)
                 for i in range(map_size):
-                    contribution -= 2 * get_summed_kernel_vals(
+                    contribution = contribution - 2 * get_summed_kernel_vals(
                         generated_maps, target_maps, i)
                 factor = 1 / (num_maps ** 2)
-                contribution *= factor
+                contribution = contribution * factor
             case Kernel.GAUSSIAN:
                 factor = 1
             case Kernel.BATCH_NORM:
