@@ -156,7 +156,7 @@ class BaseStyledImageFactory():
                 clipped = self.clip_to_valid_range(generated_image)
                 generated_image.assign(clipped)
 
-        return self.deprocess(generated_image), losses
+        return self.deprocess(generated_image), losses_across_epochs
 
     @staticmethod
     def create_white_noise_image(shape):
