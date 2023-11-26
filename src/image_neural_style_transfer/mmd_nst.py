@@ -117,7 +117,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             tf.reshape(generated_maps, simplified_shape))
         target_maps = tf.transpose(
             tf.reshape(target_maps, simplified_shape))
-        print("hello world")
+        tf.print("hello world")
 
         contribution = 0
         match self.kernel:
@@ -159,7 +159,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 factor = 1
             case Kernel.BATCH_NORM:
                 factor = 1 / num_maps
-        print(contribution)
+        tf.print(contribution)
         return contribution
 
         
