@@ -13,6 +13,7 @@ import tensorflow_io as tfio
 import numpy as np
 from tqdm import tqdm
 from enum import Enum
+from math import ceil
 
 from base_nst import BaseStyledImageFactory, load_image
 
@@ -100,38 +101,55 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
     
     def calc_normalized_mmd(self, generated_maps, target_maps):
-        num_maps = generated_maps.shape[3]
+        # We don't have enough memory to calculate the image_size x image_size
+        # matrices (from Kernel calculations) directly. Therefore, we partition
+        # these calculations.
+        # There is room for improvement here (e.g. automated partitioning), but
+        # we're okay with this simpler solution for now.
+        NUM_PARTITIONS = 10
+
+        _, map_height, map_width, num_maps = generated_maps.shape
+        map_size = map_height * map_width
+        simplified_shape = [map_size, num_maps]
+        generated_maps = tf.transpose(
+            tf.reshape(generated_maps, simplified_shape))
+        target_maps = tf.transpose(
+            tf.reshape(target_maps, simplified_shape))
+
         contribution = 0
-        dot_axes = [[3], [3]]
         match self.kernel:
             case Kernel.LINEAR:
-                generated_generated_matrix = tf.tensordot(
-                    generated_maps, generated_maps, axes=dot_axes)
-                contribution += tf.math.reduce_sum(generated_generated_matrix)
+                def get_contribution(x, y, partition_num, partition_size):
+                    """
+                    TODO: Add docstring
+                    """
+                    y_start = partition_num * partition_size
+                    y_end = (partition_num + 1) * partition_size
+                    if y_start >= y.shape[0]:
+                        return 0
 
-                target_target_matrix = tf.tensordot(
-                    target_target_matrix, target_target_matrix, axes=dot_axes)
-                contribution += tf.math.reduce_sum(target_target_matrix)
+                    kernel_calcs = tf.linalg.matmul(
+                        x, y[y_start : y_end], transpose_b=True)
+                    return tf.math.reduce_sum(kernel_calcs)
+                    
+                # The last partition may be smaller.
+                partition_size = ceil(map_size / NUM_PARTITIONS)
+                for i in range(NUM_PARTITIONS):
+                    # From paper: k(f, f)
+                    contribution += get_contribution(
+                        generated_maps, generated_maps, i, partition_size)
 
-                generated_target_matrix = tf.tensordot(
-                    generated_maps, target_maps, axes=dot_axes)
-                contribution -= 2 * tf.math.reduce_sum(generated_target_matrix)
+                    # From paper: k(s, s)
+                    contribution += get_contribution(
+                        target_maps, target_maps, i, partition_size)
 
-                factor = 1 / num_maps
+                    # From paper: -2k(f, s)
+                    contribution += get_contribution(
+                        generated_maps, target_maps, i, partition_size)
+
+                factor = 1 / num_maps  # From paper: Z_k^l
                 contribution *= factor
             case Kernel.POLY:
-                generated_generated_matrix = tf.tensordot(
-                    generated_maps, generated_maps, axes=dot_axes)
-                contribution += tf.math.reduce_sum(generated_generated_matrix ** 2)
-
-                target_target_matrix = tf.tensordot(
-                    target_target_matrix, target_target_matrix, axes=dot_axes)
-                contribution += tf.math.reduce_sum(target_target_matrix ** 2)
-
-                generated_target_matrix = tf.tensordot(
-                    generated_maps, target_maps, axes=dot_axes)
-                contribution -= 2 * tf.math.reduce_sum(generated_target_matrix ** 2)
-
                 factor = 1 / (num_maps ** 2)
                 contribution *= factor
             case Kernel.GAUSSIAN:
