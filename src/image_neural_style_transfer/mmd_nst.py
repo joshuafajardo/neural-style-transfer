@@ -117,6 +117,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             tf.reshape(generated_maps, simplified_shape))
         target_maps = tf.transpose(
             tf.reshape(target_maps, simplified_shape))
+        print("hello world")
 
         contribution = 0
         match self.kernel:
