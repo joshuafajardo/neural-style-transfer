@@ -36,7 +36,7 @@ class BaseStyledImageFactory():
                  pooling="avg",
                  learning_rate=8):
         """Initialize the BaseStyledImageFactory."""
-        self.__setup_model(content_layers, style_layers, pooling)
+        self.setup_model(content_layers, style_layers, pooling)
 
         self.output_shape = content_image.shape
         style_image = tf.image.resize(style_image, (self.output_shape[:2]))
@@ -62,9 +62,9 @@ class BaseStyledImageFactory():
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=learning_rate)
 
-        self.__set_targets(content_image, style_image)
+        self.set_targets(content_image, style_image)
 
-    def __setup_model(self, content_layers, style_layers, pooling):
+    def setup_model(self, content_layers, style_layers, pooling):
         """
         Sets up an internal "model", where the input is the image to be
         improved, and the output contains the activations (aka
@@ -87,7 +87,7 @@ class BaseStyledImageFactory():
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
     
-    def __set_targets(self, content_image, style_image):
+    def set_targets(self, content_image, style_image):
         """
         Sets the targets for the loss function, based on the content
         and style images.

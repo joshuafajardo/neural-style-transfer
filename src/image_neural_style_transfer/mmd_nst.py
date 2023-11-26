@@ -4,7 +4,7 @@
 Tools for understanding NST as a domain adaptation problem, following Li et al.
 """
 
-__all__ = ["BaseStyledImageFactory", "load_image"]
+__all__ = ["Kernel", "MMDStyledImageFactory", "load_image"]
 __author__ = "joshuafajardo"
 __version__ = "0.1.0"
 
@@ -12,16 +12,23 @@ import tensorflow as tf
 import tensorflow_io as tfio
 import numpy as np
 from tqdm import tqdm
+from enum import Enum
 
 from base_nst import BaseStyledImageFactory, load_image
 
+class Kernel(Enum):
+    LINEAR = 1
+    POLY = 2
+    GAUSSIAN = 3
+    BATCH_NORM = 4
+
 class MMDStyledImageFactory(BaseStyledImageFactory):
 
-    base_style_loss_weights = {  # Source: https://github.com/lyttonhao/Neural-Style-MMD/blob/master/neural-style.py
-        "linear": 2e3,
-        "poly": 1e-1,
-        "gaussian": 3e14,
-        "batch_norm": 1e3
+    standard_style_loss_weights = {  # Source: https://github.com/lyttonhao/Neural-Style-MMD/blob/master/neural-style.py
+        Kernel.LINEAR: 2e3,
+        Kernel.POLY: 1e-1,
+        Kernel.GAUSSIAN: 3e14,
+        Kernel.BATCH_NORM: 1e3
     }
 
     def __init__(self, kernel, content_image, style_image,
@@ -32,8 +39,8 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                  style_layer_weights=None,
                  pooling="avg",
                  learning_rate=8):
-        self.__setup_model(content_layers, style_layers, pooling)
-        self.__set_kernel(kernel)
+        self.setup_model(content_layers, style_layers, pooling)
+        self.kernel = kernel
 
         self.output_shape = content_image.shape
         style_image = tf.image.resize(style_image, (self.output_shape[:2]))
@@ -54,16 +61,16 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         # The content loss weight is always set to 1 in the paper.
         self.content_loss_weight = 1
         self.style_loss_weight = \
-            balance_factor * self.base_style_loss_weights[kernel]
+            balance_factor * self.standard_style_loss_weights[kernel]
 
         # Set the optimizer
         self.learning_rate = learning_rate
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=learning_rate)
 
-        self.__set_targets(content_image, style_image)
+        self.set_targets(content_image, style_image)
     
-    def __set_targets(self, content_image, style_image):
+    def set_targets(self, content_image, style_image):
         """
         Sets the targets for the loss function, based on the content
         and style images.
@@ -80,38 +87,60 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         self.target_content_reps = self.get_content_reps(content_maps)
         self.target_style_maps = style_maps
 
-    def __set_kernel(self, kernel):
-        match kernel:
-            case "linear":
-                self.kernel = self.linear_kernel
-            case "poly":
-                pass
-            case "gaussian":
-                pass
-            case "batch_norm":
-                pass
-
     def calc_style_loss(self, generated_style_maps):
         num_layers = len(generated_style_maps)
 
         contributions_list = []
         for layer in range(num_layers):
             curr_generated_maps = generated_style_maps[layer]
-            (_, map_height, map_width, num_maps) = curr_generated_maps.shape
-            map_size = map_height * map_width
-            target = self.target_style_maps[layer]
-            # TODO: Figure out how to calculate the factor, Z_k^l
+            target_maps = self.target_style_maps[layer]
+            contribution = self.calc_normalized_mmd(curr_generated_maps, target_maps)
+            contributions_list.append(contribution)
+        contributions_tensor = tf.stack(contributions_list)
+        return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
+    
+    def calc_normalized_mmd(self, generated_maps, target_maps):
+        num_maps = generated_maps.shape[3]
+        contribution = 0
+        dot_axes = [[3], [3]]
+        match self.kernel:
+            case Kernel.LINEAR:
+                generated_generated_matrix = tf.tensordot(
+                    generated_maps, generated_maps, axes=dot_axes)
+                contribution += tf.math.reduce_sum(generated_generated_matrix)
 
-        #     factor = 1 / (4 * (num_maps ** 2) * (map_size ** 2))
-        #     contribution = factor * tf.math.reduce_sum(
-        #         (generated_rep - target_rep) ** 2)
-        #     contributions_list.append(contribution)
-        # contributions_tensor = tf.stack(contributions_list)
-        # return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
-    
-    def linear_kernel(x, y):
-        pass
-    
+                target_target_matrix = tf.tensordot(
+                    target_target_matrix, target_target_matrix, axes=dot_axes)
+                contribution += tf.math.reduce_sum(target_target_matrix)
+
+                generated_target_matrix = tf.tensordot(
+                    generated_maps, target_maps, axes=dot_axes)
+                contribution -= 2 * tf.math.reduce_sum(generated_target_matrix)
+
+                factor = 1 / num_maps
+                contribution *= factor
+            case Kernel.POLY:
+                generated_generated_matrix = tf.tensordot(
+                    generated_maps, generated_maps, axes=dot_axes)
+                contribution += tf.math.reduce_sum(generated_generated_matrix ** 2)
+
+                target_target_matrix = tf.tensordot(
+                    target_target_matrix, target_target_matrix, axes=dot_axes)
+                contribution += tf.math.reduce_sum(target_target_matrix ** 2)
+
+                generated_target_matrix = tf.tensordot(
+                    generated_maps, target_maps, axes=dot_axes)
+                contribution -= 2 * tf.math.reduce_sum(generated_target_matrix ** 2)
+
+                factor = 1 / (num_maps ** 2)
+                contribution *= factor
+            case Kernel.GAUSSIAN:
+                factor = 1
+            case Kernel.BATCH_NORM:
+                factor = 1 / num_maps
+        return contribution
+
+        
 
     def get_style_reps(self, feature_maps):
         # Since the MMD relies on the Kernel Trick, we don't explicitly
