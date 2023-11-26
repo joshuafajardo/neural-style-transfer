@@ -117,12 +117,11 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             tf.reshape(generated_maps, simplified_shape))
         target_maps = tf.transpose(
             tf.reshape(target_maps, simplified_shape))
-        tf.print("hello world")
 
         contribution = 0
         match self.kernel:
             case Kernel.LINEAR:
-                def get_contribution(x, y, partition_num, partition_size):
+                def get_summed_kernel_vals(x, y, partition_num, partition_size):
                     """
                     TODO: Add docstring
                     """
@@ -139,17 +138,14 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 partition_size = ceil(map_size / NUM_PARTITIONS)
                 for i in range(NUM_PARTITIONS):
                     # From paper: k(f, f)
-                    contribution += get_contribution(
+                    contribution += get_summed_kernel_vals(
                         generated_maps, generated_maps, i, partition_size)
-
                     # From paper: k(s, s)
-                    contribution += get_contribution(
+                    contribution += get_summed_kernel_vals(
                         target_maps, target_maps, i, partition_size)
-
                     # From paper: -2k(f, s)
-                    contribution += get_contribution(
+                    contribution -= 2 * get_summed_kernel_vals(
                         generated_maps, target_maps, i, partition_size)
-
                 factor = 1 / num_maps  # From paper: Z_k^l
                 contribution *= factor
             case Kernel.POLY:
@@ -159,10 +155,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 factor = 1
             case Kernel.BATCH_NORM:
                 factor = 1 / num_maps
-        tf.print(contribution)
         return contribution
-
-        
 
     def get_style_reps(self, feature_maps):
         # Since the MMD relies on the Kernel Trick, we don't explicitly
