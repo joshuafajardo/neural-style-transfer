@@ -106,7 +106,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         # these calculations.
         # There is room for improvement here (e.g. automated partitioning), but
         # we're okay with this simpler solution for now.
-        NUM_PARTITIONS = 10
+        NUM_PARTITIONS = 30
 
         _, map_height, map_width, num_maps = generated_maps.shape
         map_size = map_height * map_width
