@@ -111,6 +111,8 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         _, map_height, map_width, num_maps = generated_maps.shape
         map_size = map_height * map_width
         simplified_shape = [map_size, num_maps]
+        # Make tensors shape [N_l, M_l], like in the paper.
+        # Ideally, this would be automatically done by the model.
         generated_maps = tf.transpose(
             tf.reshape(generated_maps, simplified_shape))
         target_maps = tf.transpose(
@@ -156,6 +158,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 factor = 1
             case Kernel.BATCH_NORM:
                 factor = 1 / num_maps
+        print(contribution)
         return contribution
 
         
