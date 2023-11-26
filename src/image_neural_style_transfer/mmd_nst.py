@@ -95,13 +95,15 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         for layer in range(num_layers):
             curr_generated_maps = generated_style_maps[layer]
             target_maps = self.target_style_maps[layer]
-            contribution = self.calc_normalized_mmd(curr_generated_maps, target_maps)
+            contribution = self.calc_normalized_mmd(
+                self.kernel, curr_generated_maps, target_maps)
             contributions_list.append(contribution)
         contributions_tensor = tf.stack(contributions_list)
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
     
-    # @tf.autograph.experimental.do_not_convert
-    def calc_normalized_mmd(self, generated_maps, target_maps):
+    @staticmethod
+    @tf.autograph.experimental.do_not_convert
+    def calc_normalized_mmd(kernel, generated_maps, target_maps):
         # We don't have enough memory to calculate the image_size x image_size
         # matrices (from Kernel calculations) directly. Therefore, we partition
         # these calculations.
@@ -120,7 +122,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             tf.reshape(target_maps, simplified_shape))
 
         contribution = 0
-        match self.kernel:
+        match kernel:
             case Kernel.LINEAR:
                 def get_summed_kernel_vals(x, y, partition_num, partition_size):
                     """
@@ -173,7 +175,6 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 factor = 1
             case Kernel.BATCH_NORM:
                 factor = 1 / num_maps
-        print("one iteration")
         return contribution
 
     def get_style_reps(self, feature_maps):
