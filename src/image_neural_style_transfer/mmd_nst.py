@@ -154,10 +154,9 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     TODO: Add docstring
                     """
                     kernel_calcs = tf.linalg.matmul(
-                        x, y[:, y_index], transpose_a=True)
+                        x, y[:, y_index : y_index + 1], transpose_a=True)
                     return tf.math.reduce_sum(kernel_calcs ** 2)
                     
-                # The last partition may be smaller.
                 for i in range(map_size):
                     contribution += get_summed_kernel_vals(
                         generated_maps, generated_maps, i)
