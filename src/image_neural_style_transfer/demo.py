@@ -1,4 +1,4 @@
-from util import *
+from base_nst import *
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
@@ -11,7 +11,7 @@ with tf.device("/GPU:0"):
     style_image = load_image(STYLE_IMAGE_PATH)
     content_image = tf.image.resize(content_image, (768 // 3, 1024 // 3))
 
-    factory = StyledImageFactory(content_image, style_image)
+    factory = BaseStyledImageFactory(content_image, style_image)
     generated_image, losses = factory.generate_styled_image(num_epochs=1000)
 
 plt.imshow(tf.cast(generated_image, tf.int32))

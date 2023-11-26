@@ -53,3 +53,4 @@ comparable.
 
 The colors in the right image really do pop out more than those in the left
 image. The figures also look more stable, especially the tower in the back.
+

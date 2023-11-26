@@ -1,8 +1,8 @@
-# util.py
+# base_nst.py
 
-"""Provides tools for transfering style, following Gatys et al."""
+"""Tools for transfering style, following Gatys et al."""
 
-__all__ = ["StyledImageFactory", "load_image"]
+__all__ = ["BaseStyledImageFactory", "load_image"]
 __author__ = "joshuafajardo"
 __version__ = "0.1.0"
 
@@ -16,9 +16,9 @@ from tqdm import tqdm
 IMAGENET_MEAN = [103.939, 116.779, 123.67]  # Source: https://github.com/keras-team/keras-applications/blob/master/keras_applications/imagenet_utils.py#L61C9-L61C42
 FLOAT_TYPE = tf.keras.backend.floatx()
 
-class StyledImageFactory():
-    DEFAULT_CONTENT_LAYERS = ['block4_conv2'] 
-    DEFAULT_STYLE_LAYERS = [
+class BaseStyledImageFactory():
+    default_content_layers = ['block4_conv2'] 
+    default_style_layers = [
         'block1_conv1',
         'block2_conv1',
         'block3_conv1',
@@ -27,15 +27,15 @@ class StyledImageFactory():
     ]
 
     def __init__(self, content_image, style_image,
-                 content_layers=DEFAULT_CONTENT_LAYERS,
-                 style_layers=DEFAULT_STYLE_LAYERS,
+                 content_layers=default_content_layers,
+                 style_layers=default_style_layers,
                  content_layer_weights=None,
                  style_layer_weights=None,
                  content_loss_weight=10e-4,
                  style_loss_weight=1,
                  pooling="avg",
                  learning_rate=8):
-        """Initialize the StyledImageFactory."""
+        """Initialize the BaseStyledImageFactory."""
         self.__setup_model(content_layers, style_layers, pooling)
 
         self.output_shape = content_image.shape
@@ -62,15 +62,7 @@ class StyledImageFactory():
         self.optimizer = tf.keras.optimizers.Adam(
             learning_rate=learning_rate)
 
-        # Set up the target representations.
-        content_model_out = self.model(self.preprocess(content_image))
-        style_model_out = self.model(self.preprocess(style_image))
-
-        content_maps = content_model_out["content_maps"]
-        style_maps = style_model_out["style_maps"]
-
-        self.target_content_reps = self.get_content_reps(content_maps)
-        self.target_style_reps = self.get_style_reps(style_maps)
+        self.__set_targets(content_image, style_image)
 
     def __setup_model(self, content_layers, style_layers, pooling):
         """
@@ -94,6 +86,21 @@ class StyledImageFactory():
         }
 
         self.model = tf.keras.Model([vgg_model.input], outputs)
+    
+    def __set_targets(self, content_image, style_image):
+        """
+        Sets the targets for the loss function, based on the content
+        and style images.
+        """
+        content_model_out = self.model(self.preprocess(content_image))
+        style_model_out = self.model(self.preprocess(style_image))
+
+        content_maps = content_model_out["content_maps"]
+        style_maps = style_model_out["style_maps"]
+
+        self.target_content_reps = self.get_content_reps(content_maps)
+        self.target_style_reps = self.get_style_reps(style_maps)
+        
     
     @staticmethod
     def replace_max_pooling_with_avg_pooling(model):
@@ -227,8 +234,8 @@ class StyledImageFactory():
 
         contributions_list = []
         for layer in range(num_layers):
-            generated_map = generated_style_maps[layer]
-            (_, map_height, map_width, num_maps) = generated_map.shape
+            curr_generated_maps = generated_style_maps[layer]
+            (_, map_height, map_width, num_maps) = curr_generated_maps.shape
             map_size = map_height * map_width
 
             generated_rep = generated_reps[layer]
