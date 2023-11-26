@@ -125,11 +125,11 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     """
                     y_start = partition_num * partition_size
                     y_end = (partition_num + 1) * partition_size
-                    if y_start >= y.shape[0]:
+                    if y_start >= y.shape[1]:
                         return 0
 
                     kernel_calcs = tf.linalg.matmul(
-                        x, y[y_start : y_end], transpose_b=True)
+                        x, y[:, y_start : y_end], transpose_a=True)
                     return tf.math.reduce_sum(kernel_calcs)
                     
                 # The last partition may be smaller.
