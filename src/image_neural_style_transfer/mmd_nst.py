@@ -102,7 +102,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
     
     @staticmethod
-    @tf.autograph.experimental.do_not_convert
+    # @tf.autograph.experimental.do_not_convert
     def calc_normalized_mmd(kernel, generated_maps, target_maps):
         # We don't have enough memory to calculate the image_size x image_size
         # matrices (from Kernel calculations) directly. Therefore, we partition
@@ -122,59 +122,59 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             tf.reshape(target_maps, simplified_shape))
 
         contribution = 0
-        match kernel:
-            case Kernel.LINEAR:
-                def get_summed_kernel_vals(x, y, partition_num, partition_size):
-                    """
-                    TODO: Add docstring
-                    """
-                    y_start = partition_num * partition_size
-                    y_end = (partition_num + 1) * partition_size
-                    if y_start >= y.shape[1]:
-                        return 0
+        # match kernel:
+        #     case Kernel.LINEAR:
+        #         def get_summed_kernel_vals(x, y, partition_num, partition_size):
+        #             """
+        #             TODO: Add docstring
+        #             """
+        #             y_start = partition_num * partition_size
+        #             y_end = (partition_num + 1) * partition_size
+        #             if y_start >= y.shape[1]:
+        #                 return 0
 
-                    kernel_calcs = tf.linalg.matmul(
-                        x, y[:, y_start : y_end], transpose_a=True)
-                    return tf.math.reduce_sum(kernel_calcs)
+        #             kernel_calcs = tf.linalg.matmul(
+        #                 x, y[:, y_start : y_end], transpose_a=True)
+        #             return tf.math.reduce_sum(kernel_calcs)
                     
-                # The last partition may be smaller.
-                partition_size = ceil(map_size / NUM_PARTITIONS)
-                for i in range(NUM_PARTITIONS):
-                    # From paper: k(f, f)
-                    contribution += get_summed_kernel_vals(
-                        generated_maps, generated_maps, i, partition_size)
-                    # From paper: k(s, s)
-                    contribution += get_summed_kernel_vals(
-                        target_maps, target_maps, i, partition_size)
-                    # From paper: -2k(f, s)
-                    contribution -= 2 * get_summed_kernel_vals(
-                        generated_maps, target_maps, i, partition_size)
-                factor = 1 / num_maps  # From paper: Z_k^l
-                contribution *= factor
-            case Kernel.POLY:
-                def get_summed_kernel_vals(x, y, y_index):
-                    """
-                    TODO: Add docstring
-                    """
-                    kernel_calcs = tf.linalg.matvec(
-                        x, y[:, y_index], transpose_a=True)
-                    return tf.math.reduce_sum(kernel_calcs ** 2)
-                    
-                for i in range(map_size):
-                    contribution = contribution + get_summed_kernel_vals(
-                        generated_maps, generated_maps, i)
-                for i in range(map_size):
-                    contribution = contribution + get_summed_kernel_vals(
-                        target_maps, target_maps, i)
-                for i in range(map_size):
-                    contribution = contribution - 2 * get_summed_kernel_vals(
-                        generated_maps, target_maps, i)
-                factor = 1 / (num_maps ** 2)
-                contribution = contribution * factor
-            case Kernel.GAUSSIAN:
-                factor = 1
-            case Kernel.BATCH_NORM:
-                factor = 1 / num_maps
+        #         # The last partition may be smaller.
+        #         partition_size = ceil(map_size / NUM_PARTITIONS)
+        #         for i in range(NUM_PARTITIONS):
+        #             # From paper: k(f, f)
+        #             contribution += get_summed_kernel_vals(
+        #                 generated_maps, generated_maps, i, partition_size)
+        #             # From paper: k(s, s)
+        #             contribution += get_summed_kernel_vals(
+        #                 target_maps, target_maps, i, partition_size)
+        #             # From paper: -2k(f, s)
+        #             contribution -= 2 * get_summed_kernel_vals(
+        #                 generated_maps, target_maps, i, partition_size)
+        #         factor = 1 / num_maps  # From paper: Z_k^l
+        #         contribution *= factor
+            # case Kernel.POLY:
+        def get_summed_kernel_vals(x, y, y_index):
+            """
+            TODO: Add docstring
+            """
+            kernel_calcs = tf.linalg.matvec(
+                x, y[:, y_index], transpose_a=True)
+            return tf.math.reduce_sum(kernel_calcs ** 2)
+            # 
+        for i in range(map_size):
+            contribution = contribution + get_summed_kernel_vals(
+                generated_maps, generated_maps, i)
+        for i in range(map_size):
+            contribution = contribution + get_summed_kernel_vals(
+                target_maps, target_maps, i)
+        for i in range(map_size):
+            contribution = contribution - 2 * get_summed_kernel_vals(
+                generated_maps, target_maps, i)
+        factor= 1 / (num_maps ** 2)
+        contribution = contribution * factor
+            # case Kernel.GAUSSIAN:
+            #     factor = 1
+            # case Kernel.BATCH_NORM:
+            #     factor = 1 / num_maps
         return contribution
 
     def get_style_reps(self, feature_maps):
