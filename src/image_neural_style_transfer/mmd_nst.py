@@ -165,13 +165,13 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             return tf.math.reduce_sum(kernel_calcs ** 2)
 
         partition_size = ceil(map_size / NUM_PARTITIONS)
-        for i in range(map_size):
+        for i in range(NUM_PARTITIONS):
             contribution = contribution + get_summed_kernel_vals(
                 generated_maps, generated_maps, i, partition_size)
-        for i in range(map_size):
+        for i in range(NUM_PARTITIONS):
             contribution = contribution + get_summed_kernel_vals(
                 target_maps, target_maps, i, partition_size)
-        for i in range(map_size):
+        for i in range(NUM_PARTITIONS):
             contribution = contribution - 2 * get_summed_kernel_vals(
                 generated_maps, target_maps, i, partition_size)
         factor= 1 / (num_maps ** 2)
