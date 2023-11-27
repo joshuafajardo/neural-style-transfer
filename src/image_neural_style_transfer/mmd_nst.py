@@ -156,8 +156,8 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     """
                     TODO: Add docstring
                     """
-                    kernel_calcs = tf.linalg.matmul(
-                        x, y[:, y_index : y_index + 1], transpose_a=True)
+                    kernel_calcs = tf.linalg.matvec(
+                        x, y[:, y_index], transpose_a=True)
                     return tf.math.reduce_sum(kernel_calcs ** 2)
                     
                 for i in range(map_size):
