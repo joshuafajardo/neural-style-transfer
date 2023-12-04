@@ -143,8 +143,8 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             factor= 1 / (num_maps ** 2)
             contribution = contribution * factor
             return contribution
-        # case Kernel.GAUSSIAN:
-        #     factor = 1
+        elif kernel == Kernel.GAUSSIAN:
+            factor = 1
         # case Kernel.BATCH_NORM:
         #     factor = 1 / num_maps
 
