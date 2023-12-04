@@ -2,27 +2,29 @@
 
 ![neckarfront styled with starry night](generated/neckarfront-starry_night-avg_pooling.png)
 
-This repository re-implements a variety of papers relating to Neural Style
+This repository contains a collection of projects that re-implement a variety of papers relating to Neural Style
 Transfer (NST), introduced by Gatys et al. in "A Neural Algorithm of Artistic
-Style".
+Style" [[1]](#1).
 
 
 ## Projects Within This Repository
 ### [NST for Images](#nst-for-images)
-- "A Neural Algorithm of Artistic Style" (Gatys et al.)
+- **Status** Working on 2nd demo
 - Try it out in [Colab](https://colab.research.google.com/drive/1_vnwvTRRpNOcql8vib8MigMU7yOkI8VP?usp=sharing)!
-- **Status:** Complete!
+- Based on:
+    - "A Neural Algorithm of Artistic Style" (Gatys et al.) [[1]](#1)
+    - "Demystifying Neural Style Transfer" (Li et al.) [[2]](#2)
 
 ### Video Style Transfer
+- **Status:** Reading finished, currently implementing
 - "Real-Time Neural Style Transfer for Videos" (Huang et al.)
-- **Status:** Implementation phase
 
 ### 3D Video Style Transfer
+- **Status:** Currently reading
 - "Stereoscopic Neural Style Transfer" (Chen et al.)
-- **Status:** Reading phase
-
 
 ## NST For Images
+### Project 1.1: Base NST
 This project is based on the paper that really kicked off the field of NST.
 My implementation has two main goals:
 1) **Stay as true as possible to the original implementation.** While there are
@@ -34,7 +36,7 @@ organizing methods by descending levels of abstraction, following the stepdown
 rule from the book, Clean Code.
 
 
-### Fun Findings
+#### <ins>Fun Findings</ins>
 **Average pooling >> Max Pooling**
 
 The paper's authors recommend replacing VGG19's max pooling layers with average
@@ -52,5 +54,27 @@ a slightly higher weight for style loss in order to make the results more
 comparable.
 
 The colors in the right image really do pop out more than those in the left
-image. The figures also look more stable, especially the tower in the back.
+image. The figures also look more stable, especially the tower in the back. In the paper, the authors mention that using average pooling helps improve the "gradient flow".
 
+### Project 1.2: Maximum Mean Discrepancy (MMD) NST
+Through this project based on the paper by Li et al. [[2]](#2), I was able to gain a better understanding of how NST really works behind the scenes. I got to learn about types of problems categorized as "domain adaptation" problems, and was able to see how NST fits this description. By viewing the problem through this lens, the authors were able to try tackling NST with different tools that are commonly used to handle domain adaptation problems.
+
+My main goal with this project was to **highlight the differences** between this paper and the paper by Gatys et al. by **inheriting** from my "base" implementation and only changing the necessary portions.
+
+
+
+#### <ins>Fun (and not-so-fun) findings:</ins>
+**MMD calculations require a lot of GPU RAM**
+
+To my initial surprise, the MMD calculations required a huge amount of GPU RAM when compared to using the Gram matrices. For images with dimensions 256 x 341, when using the polynomial kernel for MMD NST (mathematically equivalent to Gram matrix NST), MMD NST requires **~30 Gigabytes** of GPU RAM, while Base NST requires no more than **10 Gigabytes**.
+
+By stepping through my program, I was able to find that the matrix multiplications were causing my memory usage to skyrocket. To prevent this, I initially tried "partitioning" the features at each layer in order to run several, smaller calculations. However, once I reached the gradient calculations, the memory usage skyrocketted to roughly the same amount.
+
+In the end, I settled for simply reducing the image sizes even further. In the future, I would love to try connecting my Colab to a GCE VM to run my code with much more VRAM.
+
+
+## References
+<a id="1">[1]</a> [A Neural Algorithm of Artistic Style](
+https://doi.org/10.48550/arXiv.1508.06576)
+
+<a id="2">[2]</a> [Demystifying Neural Style Transfer](https://doi.org/10.48550/arXiv.1701.01036)
