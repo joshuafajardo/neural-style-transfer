@@ -70,7 +70,7 @@ To my initial surprise, the MMD calculations required a huge amount of GPU RAM w
 
 By stepping through my program, I was able to find that the matrix multiplications were causing my memory usage to skyrocket. To prevent this, I initially tried "partitioning" the features at each layer in order to run several, smaller calculations. However, once I reached the gradient calculations, the memory usage skyrocketted to roughly the same amount.
 
-In the end, I settled for simply reducing the image sizes even further. In the future, I would love to try connecting my Colab to a GCE VM to run my code with much more VRAM.
+In the end, I settled for simply **shrinking the images even further**. In the future, I would love to try connecting my Colab to a GCE VM to run my code with much more VRAM.
 
 
 ## References
