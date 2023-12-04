@@ -1,6 +1,6 @@
 # Neural Style Transfer
 
-![neckarfront styled with starry night](generated/neckarfront-starry_night-avg_pooling.png)
+![neckarfront styled with starry night](generated/base-nst/neckarfront-starry_night-avg_pooling.png)
 
 This repository contains a collection of projects that re-implement a variety of papers relating to Neural Style
 Transfer (NST), introduced by Gatys et al. in "A Neural Algorithm of Artistic
@@ -45,8 +45,8 @@ using the VGG19 model as-is—I thought that the results would be fine.
 
 The difference really is astounding, however.
 
-![neckarfront-starry_night, max pooling](generated/neckarfront-starry_night-max_pooling.png)
-![neckarfront-starry_night, average pooling](generated/neckarfront-starry_night-avg_pooling.png)
+![neckarfront-starry_night, max pooling](generated/base-nst/neckarfront-starry_night-max_pooling.png)
+![neckarfront-starry_night, average pooling](generated/base-nst/neckarfront-starry_night-avg_pooling.png)
 
 The result with max pooling is shown on the left, and the result with average
 pooling is shown on the right. Disclaimer: the right image was generated with
