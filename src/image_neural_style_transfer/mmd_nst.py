@@ -111,58 +111,42 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         target_maps = tf.reshape(target_maps, simplified_shape)
 
         contribution = 0
-        # match kernel:
-        #     case Kernel.LINEAR:
-        #         def get_summed_kernel_vals(x, y, partition_num, partition_size):
-        #             """
-        #             TODO: Add docstring
-        #             """
-        #             y_start = partition_num * partition_size
-        #             y_end = (partition_num + 1) * partition_size
-        #             if y_start >= y.shape[1]:
-        #                 return 0
+        if kernel == Kernel.LINEAR:
+            def get_summed_kernel_vals(x, y):
+                kernel_calcs = tf.linalg.matmul(
+                    x, y, transpose_b=True)
+                return tf.math.reduce_sum(kernel_calcs)
 
-        #             kernel_calcs = tf.linalg.matmul(
-        #                 x, y[:, y_start : y_end], transpose_a=True)
-        #             return tf.math.reduce_sum(kernel_calcs)
-                    
-        #         # The last partition may be smaller.
-        #         partition_size = ceil(map_size / NUM_PARTITIONS)
-        #         for i in range(NUM_PARTITIONS):
-        #             # From paper: k(f, f)
-        #             contribution += get_summed_kernel_vals(
-        #                 # TODO: transpose these guys
-        #                 generated_maps, generated_maps, i, partition_size)
-        #             # From paper: k(s, s)
-        #             contribution += get_summed_kernel_vals(
-        #                 target_maps, target_maps, i, partition_size)
-        #             # From paper: -2k(f, s)
-        #             contribution -= 2 * get_summed_kernel_vals(
-        #                 generated_maps, target_maps, i, partition_size)
-        #         factor = 1 / num_maps  # From paper: Z_k^l
-        #         contribution *= factor
-            # case Kernel.POLY:
-        def get_summed_kernel_vals(x, y):
-            """
-            TODO: Add docstring
-            """
-            kernel_calcs = tf.linalg.matmul(
-                x, y, transpose_b=True)
-            return tf.math.reduce_sum(kernel_calcs ** 2)
+            contribution = contribution + get_summed_kernel_vals(
+                generated_maps, generated_maps)
+            contribution = contribution + get_summed_kernel_vals(
+                target_maps, target_maps)
+            contribution = contribution - 2 * get_summed_kernel_vals(
+                generated_maps, target_maps)
 
-        contribution = contribution + get_summed_kernel_vals(
-            generated_maps, generated_maps)
-        contribution = contribution + get_summed_kernel_vals(
-            target_maps, target_maps)
-        contribution = contribution - 2 * get_summed_kernel_vals(
-            generated_maps, target_maps)
-        factor= 1 / (num_maps ** 2)
-        contribution = contribution * factor
-            # case Kernel.GAUSSIAN:
-            #     factor = 1
-            # case Kernel.BATCH_NORM:
-            #     factor = 1 / num_maps
-        return contribution
+            factor= 1 / (num_maps)
+            contribution = contribution * factor
+            return contribution
+        elif kernel == Kernel.POLY:
+            def get_summed_kernel_vals(x, y):
+                kernel_calcs = tf.linalg.matmul(
+                    x, y, transpose_b=True)
+                return tf.math.reduce_sum(kernel_calcs ** 2)
+
+            contribution = contribution + get_summed_kernel_vals(
+                generated_maps, generated_maps)
+            contribution = contribution + get_summed_kernel_vals(
+                target_maps, target_maps)
+            contribution = contribution - 2 * get_summed_kernel_vals(
+                generated_maps, target_maps)
+
+            factor= 1 / (num_maps ** 2)
+            contribution = contribution * factor
+            return contribution
+        # case Kernel.GAUSSIAN:
+        #     factor = 1
+        # case Kernel.BATCH_NORM:
+        #     factor = 1 / num_maps
 
     def get_style_reps(self, feature_maps):
         # Since the MMD relies on the Kernel Trick, we don't explicitly
