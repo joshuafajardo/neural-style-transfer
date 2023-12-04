@@ -72,6 +72,21 @@ By stepping through my program, I was able to find that the matrix multiplicatio
 
 In the end, I settled for simply **shrinking the images even further**. In the future, I would love to try connecting my Colab to a GCE VM to run my code with much more VRAM.
 
+**Finding a good normalizing term for $\pmb{Z_k^l}$**
+
+The paper mentions a normalizing term, $Z_k^l$, for calculating the style loss for a given layer. However, this term was only given for the polynomial and batch norm (BN) kernels.
+
+I initially looked at the original author's code to see what terms they used for $Z_k^l$, but I couldn't really understand their code, and wasn't sure if they were applying the normalization for certain kernels.
+
+I reasoned out my own normalization terms for each kernel, following the idea that, regardless of the number of maps, the resulting style loss should give similar results. I chose the following terms:
+- Linear Kernel: $\dfrac{1}{N_l}$
+- Polynomial Kernel: $\dfrac{1}{N_l^2}$ (Derived in the paper as $\dfrac{4}{N_l^2}$ from Base NST)
+- RBF/Gaussian Kernel: 1
+- Batch Normalization (BN) Kernel: $\dfrac{1}{N_l}$ (Given in the paper)
+
+Where $N_l$ is the number of maps in a given layer.
+
+I was really struck when I figured out the normalization term for the RBF kernel. Taking a look at the polynomial kernel, we can reason that the result of $k(\mathbf{1_n}, \mathbf{1_n})$ should grow with $n$ as $O(n^2)$ (giving rise to our $\dfrac{1}{N_l^2}$ term). Unlike the other kernels, the range of values for the RBF kernel is constrained to \(0, 1\]. Because this range is unaffected by the dimensionality of the input vectors (which, in our case, is the number of maps $N_l$), **we don't have to worry about normalization for this kernel**!
 
 ## References
 <a id="1">[1]</a> [A Neural Algorithm of Artistic Style](
