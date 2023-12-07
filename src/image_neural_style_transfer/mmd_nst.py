@@ -115,7 +115,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             def get_summed_kernel_vals(x, y):
                 kernel_calcs = tf.linalg.matmul(
                     x, y, transpose_b=True)
-                return tf.math.reduce_sum(kernel_calcs)
+                return tf.reduce_sum(kernel_calcs)
 
             contribution = contribution + get_summed_kernel_vals(
                 generated_maps, generated_maps)
@@ -131,7 +131,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             def get_summed_kernel_vals(x, y):
                 kernel_calcs = tf.linalg.matmul(
                     x, y, transpose_b=True)
-                return tf.math.reduce_sum(kernel_calcs ** 2)
+                return tf.reduce_sum(kernel_calcs ** 2)
 
             contribution = contribution + get_summed_kernel_vals(
                 generated_maps, generated_maps)
@@ -144,7 +144,55 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             contribution = contribution * factor
             return contribution
         elif kernel == Kernel.GAUSSIAN:
-            factor = 1
+            def get_unbiased_mmd_estimate(x, y):
+                def sample_pairs_without_replacement(cardinality, num_pairs):
+                    flattened_samples = np.random.Generator.choice(
+                        cardinality ** 2, size=num_pairs, replace=False)
+                    # x indices, y indices
+                    return [flattened_samples // cardinality,
+                            flattened_samples % cardinality]
+                def get_squared_l2_norms(vectors):
+                    # Assumes vectors[i] is the ith vector.
+                    tf.reduce_sum(tf.math.pow(vectors, 2), axis=1)
+                    
+                num_samples = x.shape[0] & ~1  # Want even num_samples
+                indices = sample_pairs_without_replacement(num_samples)
+
+                x_samples = x[indices[0]]
+                y_samples = y[indices[1]]
+
+                x_even = x_samples[0::2]
+                x_odd = x_samples[1::2]
+                y_even = y_samples[0::2]
+                y_odd = y_samples[1::2]
+
+                diffs = {
+                    "xx": x_odd - x_even,
+                    "yy": y_odd - y_even,
+                    "xy": x_odd - y_even,
+                    "yx": y_odd - x_even,
+                }
+
+                norms = {
+                    "xx": get_squared_l2_norms(diffs["xx"]),
+                    "yy": get_squared_l2_norms(diffs["yy"]),
+                    "xy": get_squared_l2_norms(diffs["xy"]),
+                    "yx": get_squared_l2_norms(diffs["yx"]),
+                }
+
+                gamma = num_samples / tf.reduce_sum(norms.values)
+
+                kernel_outs = {
+                    "xx": tf.math.exp(-gamma * norms["xx"]),
+                    "yy": tf.math.exp(-gamma * norms["yy"]),
+                    "xy": tf.math.exp(-gamma * norms["xy"]),
+                    "yx": tf.math.exp(-gamma * norms["yx"]),
+                }
+
+                return tf.reduce_sum(kernel_outs["xx"] + kernel_outs["yy"]
+                    - kernel_outs["xy"] - kernel_outs["yx"])
+            return get_unbiased_mmd_estimate(generated_maps, target_maps)
+
         # case Kernel.BATCH_NORM:
         #     factor = 1 / num_maps
 
