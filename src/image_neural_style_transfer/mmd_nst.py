@@ -174,20 +174,20 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     "yx": y_odd - x_even,
                 }
 
-                norms = {
+                squared_norms = {
                     "xx": get_squared_l2_norms(diffs["xx"]),
                     "yy": get_squared_l2_norms(diffs["yy"]),
                     "xy": get_squared_l2_norms(diffs["xy"]),
                     "yx": get_squared_l2_norms(diffs["yx"]),
                 }
 
-                gamma = num_samples / tf.reduce_sum(list(norms.values()))
+                gamma = num_samples / tf.reduce_sum(list(squared_norms.values()))
 
                 kernel_outs = {
-                    "xx": tf.math.exp(-gamma * norms["xx"]),
-                    "yy": tf.math.exp(-gamma * norms["yy"]),
-                    "xy": tf.math.exp(-gamma * norms["xy"]),
-                    "yx": tf.math.exp(-gamma * norms["yx"]),
+                    "xx": tf.math.exp(-gamma * squared_norms["xx"]),
+                    "yy": tf.math.exp(-gamma * squared_norms["yy"]),
+                    "xy": tf.math.exp(-gamma * squared_norms["xy"]),
+                    "yx": tf.math.exp(-gamma * squared_norms["yx"]),
                 }
 
                 return tf.reduce_sum(kernel_outs["xx"] + kernel_outs["yy"]
