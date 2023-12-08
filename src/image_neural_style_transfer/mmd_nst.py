@@ -181,7 +181,6 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     "yx": get_squared_l2_norms(diffs["yx"]),
                 }
 
-                print(list(norms.values()))
                 gamma = num_samples / tf.reduce_sum(list(norms.values()))
 
                 kernel_outs = {
