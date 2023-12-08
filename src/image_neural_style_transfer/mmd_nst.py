@@ -145,21 +145,22 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
             return contribution
         elif kernel == Kernel.GAUSSIAN:
             def get_unbiased_mmd_estimate(x, y):
-                def sample_pairs_without_replacement(cardinality, num_pairs):
-                    flattened_samples = np.random.Generator.choice(
-                        cardinality ** 2, size=num_pairs, replace=False)
+                def sample_pairs_without_replacement(cardinality):
+                    rng = np.random.default_rng()
+                    flattened_samples = rng.choice(
+                        cardinality ** 2, size=cardinality, replace=False)
                     # x indices, y indices
                     return [flattened_samples // cardinality,
                             flattened_samples % cardinality]
                 def get_squared_l2_norms(vectors):
                     # Assumes vectors[i] is the ith vector.
-                    tf.reduce_sum(tf.math.pow(vectors, 2), axis=1)
+                    return tf.reduce_sum(tf.math.pow(vectors, 2), axis=1)
                     
                 num_samples = x.shape[0] & ~1  # Want even num_samples
                 indices = sample_pairs_without_replacement(num_samples)
 
-                x_samples = x[indices[0]]
-                y_samples = y[indices[1]]
+                x_samples = tf.gather(x, indices[0])
+                y_samples = tf.gather(y, indices[1])
 
                 x_even = x_samples[0::2]
                 x_odd = x_samples[1::2]
@@ -180,7 +181,8 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     "yx": get_squared_l2_norms(diffs["yx"]),
                 }
 
-                gamma = num_samples / tf.reduce_sum(norms.values)
+                print(list(norms.values()))
+                gamma = num_samples / tf.reduce_sum(list(norms.values()))
 
                 kernel_outs = {
                     "xx": tf.math.exp(-gamma * norms["xx"]),
