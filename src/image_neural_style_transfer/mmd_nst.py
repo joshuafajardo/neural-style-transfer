@@ -190,10 +190,8 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     "yx": tf.math.exp(-gamma * squared_norms["yx"]),
                 }
 
-                # return tf.reduce_sum(kernel_outs["xx"] + kernel_outs["yy"]
-                #     - kernel_outs["xy"] - kernel_outs["yx"])
                 return tf.reduce_sum(kernel_outs["xx"] + kernel_outs["yy"]
-                    - kernel_outs["xy"] - kernel_outs["yx"])
+                    - kernel_outs["xy"] - kernel_outs["yx"]) / num_samples
             return get_unbiased_mmd_estimate(generated_maps, target_maps)
 
         # case Kernel.BATCH_NORM:
