@@ -41,7 +41,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                  pooling="avg",
                  learning_rate=8):
         self.setup_model(content_layers, style_layers, pooling)
-        self.kernel = kernel
+        self.set_mmd_helper(kernel)
 
         self.output_shape = content_image.shape
         style_image = tf.image.resize(style_image, (self.output_shape[:2]))
@@ -87,6 +87,17 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
 
         self.target_content_reps = self.get_content_reps(content_maps)
         self.target_style_maps = style_maps
+    
+    def set_mmd_helper(self, kernel):
+        match kernel:
+            case Kernel.LINEAR:
+                self.mmd_helper = self.calc_linear_normalized_mmd
+            case Kernel.POLY:
+                self.mmd_helper = self.calc_poly_normalized_mmd
+            case Kernel.GAUSSIAN:
+                self.mmd_helper = self.calc_gaussian_normalized_mmd
+            case Kernel.BATCH_NORM:
+                self.mmd_helper = self.calc_batch_norm_normalized_mmd
 
     def calc_style_loss(self, generated_style_maps):
         num_layers = len(generated_style_maps)
@@ -95,122 +106,133 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         for layer in range(num_layers):
             curr_generated_maps = generated_style_maps[layer]
             target_maps = self.target_style_maps[layer]
-            contribution = self.calc_normalized_mmd(
-                self.kernel, curr_generated_maps, target_maps)
+            contribution = self.calc_normalized_mmd(curr_generated_maps,
+                                                    target_maps)
             contributions_list.append(contribution)
         contributions_tensor = tf.stack(contributions_list)
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
     
     @staticmethod
     # @tf.autograph.experimental.do_not_convert
-    def calc_normalized_mmd(kernel, generated_maps, target_maps):
+    def calc_normalized_mmd(self, generated_maps, target_maps):
         _, map_height, map_width, num_maps = generated_maps.shape
         map_size = map_height * map_width
         simplified_shape = [map_size, num_maps]
         generated_maps = tf.reshape(generated_maps, simplified_shape)  # very little extra space used when reshaping
         target_maps = tf.reshape(target_maps, simplified_shape)
+        return self.mmd_helper(generated_maps, target_maps)
+    
+    def calc_linear_normalized_mmd(generated_maps, target_maps):
+        map_size, num_maps = generated_maps.shape
+        def get_summed_kernel_vals(x, y):
+            kernel_calcs = tf.linalg.matmul(
+                x, y, transpose_b=True)
+            return tf.reduce_sum(kernel_calcs)
 
         contribution = 0
-        if kernel == Kernel.LINEAR:
-            def get_summed_kernel_vals(x, y):
-                kernel_calcs = tf.linalg.matmul(
-                    x, y, transpose_b=True)
-                return tf.reduce_sum(kernel_calcs)
+        contribution = contribution + get_summed_kernel_vals(
+            generated_maps, generated_maps)
+        contribution = contribution + get_summed_kernel_vals(
+            target_maps, target_maps)
+        contribution = contribution - 2 * get_summed_kernel_vals(
+            generated_maps, target_maps)
 
-            contribution = contribution + get_summed_kernel_vals(
-                generated_maps, generated_maps)
-            contribution = contribution + get_summed_kernel_vals(
-                target_maps, target_maps)
-            contribution = contribution - 2 * get_summed_kernel_vals(
-                generated_maps, target_maps)
+        factor= 1 / (num_maps)
+        contribution = contribution * factor
+        return contribution
 
-            factor= 1 / (num_maps)
-            contribution = contribution * factor
-            return contribution
-        elif kernel == Kernel.POLY:
-            def get_summed_kernel_vals(x, y):
-                kernel_calcs = tf.linalg.matmul(
-                    x, y, transpose_b=True)
-                return tf.reduce_sum(kernel_calcs ** 2)
+    def calc_poly_normalized_mmd(generated_maps, target_maps):
+        map_size, num_maps = generated_maps.shape
+        def get_summed_kernel_vals(x, y):
+            kernel_calcs = tf.linalg.matmul(
+                x, y, transpose_b=True)
+            return tf.reduce_sum(kernel_calcs ** 2)
 
-            contribution = contribution + get_summed_kernel_vals(
-                generated_maps, generated_maps)
-            contribution = contribution + get_summed_kernel_vals(
-                target_maps, target_maps)
-            contribution = contribution - 2 * get_summed_kernel_vals(
-                generated_maps, target_maps)
+        contribution = 0
+        contribution = contribution + get_summed_kernel_vals(
+            generated_maps, generated_maps)
+        contribution = contribution + get_summed_kernel_vals(
+            target_maps, target_maps)
+        contribution = contribution - 2 * get_summed_kernel_vals(
+            generated_maps, target_maps)
 
-            factor= 1 / (num_maps ** 2)
-            contribution = contribution * factor
-            return contribution
-        elif kernel == Kernel.GAUSSIAN:
-            def get_unbiased_mmd_estimate(x, y):
-                def sample_pairs_without_replacement(cardinality):
-                    rng = np.random.default_rng()
-                    flattened_samples = rng.choice(
-                        cardinality ** 2, size=cardinality, replace=False)
-                    # x indices, y indices
-                    return [flattened_samples // cardinality,
-                            flattened_samples % cardinality]
-                def get_squared_l2_norms(vectors):
-                    # Assumes vectors[i] is the ith vector.
-                    return tf.reduce_sum(tf.math.pow(vectors, 2), axis=1)
-                    
-                num_samples = x.shape[0] & ~1  # Want even num_samples
-                indices = sample_pairs_without_replacement(num_samples)
+        factor= 1 / (num_maps ** 2)
+        contribution = contribution * factor
+        return contribution
 
-                x_samples = tf.gather(x, indices[0])
-                y_samples = tf.gather(y, indices[1])
+    def calc_gaussian_normalized_mmd(generated_maps, target_maps):
+        def get_unbiased_mmd_estimate(x, y):
+            def sample_pairs_without_replacement(cardinality):
+                rng = np.random.default_rng()
+                flattened_samples = rng.choice(
+                    cardinality ** 2, size=cardinality, replace=False)
+                # x indices, y indices
+                return [flattened_samples // cardinality,
+                        flattened_samples % cardinality]
+            def get_squared_l2_norms(vectors):
+                # Assumes vectors[i] is the ith vector.
+                return tf.reduce_sum(tf.math.pow(vectors, 2), axis=1)
+                
+            num_samples = x.shape[0] & ~1  # Want even num_samples
+            indices = sample_pairs_without_replacement(num_samples)
 
-                x_even = x_samples[0::2]
-                x_odd = x_samples[1::2]
-                y_even = y_samples[0::2]
-                y_odd = y_samples[1::2]
+            x_samples = tf.gather(x, indices[0])
+            y_samples = tf.gather(y, indices[1])
 
-                diffs = {
-                    "xx": x_odd - x_even,
-                    "yy": y_odd - y_even,
-                    "xy": x_odd - y_even,
-                    "yx": y_odd - x_even,
-                }
+            x_even = x_samples[0::2]
+            x_odd = x_samples[1::2]
+            y_even = y_samples[0::2]
+            y_odd = y_samples[1::2]
 
-                squared_norms = {
-                    "xx": get_squared_l2_norms(diffs["xx"]),
-                    "yy": get_squared_l2_norms(diffs["yy"]),
-                    "xy": get_squared_l2_norms(diffs["xy"]),
-                    "yx": get_squared_l2_norms(diffs["yx"]),
-                }
+            diffs = {
+                "xx": x_odd - x_even,
+                "yy": y_odd - y_even,
+                "xy": x_odd - y_even,
+                "yx": y_odd - x_even,
+            }
 
-                gamma = num_samples / tf.reduce_sum(list(squared_norms.values()))
+            squared_norms = {
+                "xx": get_squared_l2_norms(diffs["xx"]),
+                "yy": get_squared_l2_norms(diffs["yy"]),
+                "xy": get_squared_l2_norms(diffs["xy"]),
+                "yx": get_squared_l2_norms(diffs["yx"]),
+            }
 
-                kernel_outs = {
-                    "xx": tf.math.exp(-gamma * squared_norms["xx"]),
-                    "yy": tf.math.exp(-gamma * squared_norms["yy"]),
-                    "xy": tf.math.exp(-gamma * squared_norms["xy"]),
-                    "yx": tf.math.exp(-gamma * squared_norms["yx"]),
-                }
+            gamma = num_samples / tf.reduce_sum(list(squared_norms.values()))
 
-                return tf.reduce_sum(kernel_outs["xx"] + kernel_outs["yy"]
-                    - kernel_outs["xy"] - kernel_outs["yx"]) / num_samples
-            return get_unbiased_mmd_estimate(generated_maps, target_maps)
+            kernel_outs = {
+                "xx": tf.math.exp(-gamma * squared_norms["xx"]),
+                "yy": tf.math.exp(-gamma * squared_norms["yy"]),
+                "xy": tf.math.exp(-gamma * squared_norms["xy"]),
+                "yx": tf.math.exp(-gamma * squared_norms["yx"]),
+            }
 
-        else:
-            generated_means = tf.reduce_mean(generated_maps, keepdims=True, axis=0)
-            target_means = tf.reduce_mean(target_maps, keepdims=True, axis=0)
+            # Note that the original authors do not divide by num_samples.
+            # I added it here since it helped the higher-level features
+            # have more impact.
+            return tf.reduce_sum(kernel_outs["xx"] + kernel_outs["yy"]
+                - kernel_outs["xy"] - kernel_outs["yx"]) / num_samples
+        return get_unbiased_mmd_estimate(generated_maps, target_maps)
+    
 
-            generated_stds = tf.math.sqrt(tf.reduce_sum(tf.pow(generated_maps - generated_means, 2)) / map_size)
-            target_stds = tf.math.sqrt(tf.reduce_sum(tf.pow(target_maps - target_means, 2)) / map_size)
-            # For some reason, using the built-in tf.math.reduce_std results in NaN gradients.
-            # generated_stds = tf.math.reduce_std(generated_maps, axis=0)
-            # target_stds = tf.math.reduce_std(target_maps, axis=0)
+    def calc_batch_norm_normalized_mmd(generated_maps, target_maps):
+        map_size, num_maps = generated_maps.shape
+        generated_means = tf.reduce_mean(generated_maps, keepdims=True, axis=0)
+        target_means = tf.reduce_mean(target_maps, keepdims=True, axis=0)
 
-            means_contribution = tf.pow(generated_means - target_means, 2)
-            means_contribution = tf.reduce_sum(means_contribution)
+        generated_stds = tf.math.sqrt(tf.reduce_sum(tf.pow(generated_maps - generated_means, 2)) / map_size)
+        target_stds = tf.math.sqrt(tf.reduce_sum(tf.pow(target_maps - target_means, 2)) / map_size)
+        # For some reason, using the built-in tf.math.reduce_std results in NaN gradients.
+        # generated_stds = tf.math.reduce_std(generated_maps, axis=0)
+        # target_stds = tf.math.reduce_std(target_maps, axis=0)
 
-            stds_contribution = tf.pow(generated_stds - target_stds, 2)
-            stds_contribution = tf.reduce_sum(stds_contribution)
+        means_contribution = tf.pow(generated_means - target_means, 2)
+        means_contribution = tf.reduce_sum(means_contribution)
 
-            return (means_contribution + stds_contribution) / num_maps
+        stds_contribution = tf.pow(generated_stds - target_stds, 2)
+        stds_contribution = tf.reduce_sum(stds_contribution)
+
+        return (means_contribution + stds_contribution) / num_maps
 
     def get_style_reps(self, feature_maps):
         # Since the MMD relies on the Kernel Trick, we don't explicitly
