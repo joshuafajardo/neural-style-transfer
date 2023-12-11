@@ -112,8 +112,6 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         contributions_tensor = tf.stack(contributions_list)
         return tf.tensordot(self.style_layer_weights, contributions_tensor, 1)
     
-    @staticmethod
-    # @tf.autograph.experimental.do_not_convert
     def calc_normalized_mmd(self, generated_maps, target_maps):
         _, map_height, map_width, num_maps = generated_maps.shape
         map_size = map_height * map_width
