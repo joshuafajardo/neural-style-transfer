@@ -185,7 +185,7 @@ class BaseStyledImageFactory():
         """
         Run one optimization step on the image.
         """
-        with tf.GradientTape() as tape:  # On Colab, peaked at 26GB RAM usage
+        with tf.GradientTape() as tape:
             losses = self.calc_losses(image)
         self.optimizer.minimize(losses["total"], [image], tape=tape)
         return losses

@@ -11,8 +11,9 @@ with tf.device("/GPU:0"):
     style_image = load_image(STYLE_IMAGE_PATH)
     content_image = tf.image.resize(content_image, (768 // 8, 1024 // 8))
 
-    factory = MMDStyledImageFactory(Kernel.GAUSSIAN, content_image, style_image, balance_factor=0.000001)
-    generated_image, losses = factory.generate_styled_image(num_epochs=1000)
+    factory = MMDStyledImageFactory(Kernel.BATCH_NORM, content_image, style_image, balance_factor=10e-30)
+    generated_image, losses = factory.generate_styled_image(num_epochs=1)
+    print(generated_image)
 
 plt.imshow(tf.cast(generated_image, tf.int32))
 plt.show()

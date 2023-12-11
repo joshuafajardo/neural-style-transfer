@@ -194,8 +194,23 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                     - kernel_outs["xy"] - kernel_outs["yx"]) / num_samples
             return get_unbiased_mmd_estimate(generated_maps, target_maps)
 
-        # case Kernel.BATCH_NORM:
-        #     factor = 1 / num_maps
+        else:
+            generated_means = tf.reduce_mean(generated_maps, keepdims=True, axis=0)
+            target_means = tf.reduce_mean(target_maps, keepdims=True, axis=0)
+
+            generated_stds = tf.math.sqrt(tf.reduce_sum(tf.pow(generated_maps - generated_means, 2)) / map_size)
+            target_stds = tf.math.sqrt(tf.reduce_sum(tf.pow(target_maps - target_means, 2)) / map_size)
+            # For some reason, using the built-in tf.math.reduce_std results in NaN gradients.
+            # generated_stds = tf.math.reduce_std(generated_maps, axis=0)
+            # target_stds = tf.math.reduce_std(target_maps, axis=0)
+
+            means_contribution = tf.pow(generated_means - target_means, 2)
+            means_contribution = tf.reduce_sum(means_contribution)
+
+            stds_contribution = tf.pow(generated_stds - target_stds, 2)
+            stds_contribution = tf.reduce_sum(stds_contribution)
+
+            return (means_contribution + stds_contribution) / num_maps
 
     def get_style_reps(self, feature_maps):
         # Since the MMD relies on the Kernel Trick, we don't explicitly
