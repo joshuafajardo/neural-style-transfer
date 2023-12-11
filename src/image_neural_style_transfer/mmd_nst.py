@@ -119,7 +119,8 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         generated_maps = tf.reshape(generated_maps, simplified_shape)  # very little extra space used when reshaping
         target_maps = tf.reshape(target_maps, simplified_shape)
         return self.mmd_helper(generated_maps, target_maps)
-    
+
+    @staticmethod
     def calc_linear_normalized_mmd(generated_maps, target_maps):
         map_size, num_maps = generated_maps.shape
         def get_summed_kernel_vals(x, y):
@@ -139,6 +140,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         contribution = contribution * factor
         return contribution
 
+    @staticmethod
     def calc_poly_normalized_mmd(generated_maps, target_maps):
         map_size, num_maps = generated_maps.shape
         def get_summed_kernel_vals(x, y):
@@ -158,6 +160,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
         contribution = contribution * factor
         return contribution
 
+    @staticmethod
     def calc_gaussian_normalized_mmd(generated_maps, target_maps):
         def get_unbiased_mmd_estimate(x, y):
             def sample_pairs_without_replacement(cardinality):
@@ -212,7 +215,7 @@ class MMDStyledImageFactory(BaseStyledImageFactory):
                 - kernel_outs["xy"] - kernel_outs["yx"]) / num_samples
         return get_unbiased_mmd_estimate(generated_maps, target_maps)
     
-
+    @staticmethod
     def calc_batch_norm_normalized_mmd(generated_maps, target_maps):
         map_size, num_maps = generated_maps.shape
         generated_means = tf.reduce_mean(generated_maps, keepdims=True, axis=0)
