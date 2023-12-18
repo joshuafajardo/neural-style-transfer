@@ -105,7 +105,7 @@ class BaseStyledImageFactory():
     @staticmethod
     def replace_max_pooling_with_avg_pooling(model):
         """
-        Creates a new model from the existing model, where the MaxPooling2D
+        Creates a new model from an existing model, where the MaxPooling2D
         layers are replaced with AveragePooling2D layers.
 
         Average pooling allows for better gradient flow when optimizing
