@@ -1,21 +1,29 @@
+import os
 import torch
 import torchvision
-
 import glob
 
+from tqdm import tqdm
+
+
 FRAME_DIMENSIONS = (640, 360)
-DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
-def save_mp4s_as_frames(input_path, output_dir):
-    mp4s = glob.glob(input_path + "/*.mp4")
-    for mp4 in mp4s:
-        video, _, _ = torchvision.io.read_video(mp4)
-        video = torchvision.transforms.functional.resize(video, FRAME_DIMENSIONS)
-        # Save each frame as a png in the output_dir
-        for i in range(video.shape[0]):
-            output_path = output_dir + "/" + str(i) + ".png"
-            torchvision.io.write_png(video[i], output_path)
+def get_mp4s_from_dir(input_dir):
+    """Returns a list of mp4s from the directory."""
+    return glob.glob(input_dir + "/*.mp4")
+
+def load_and_save_frames(video_path, output_dir):
+    """
+    Loads and saves the frames of the video as pngs in the
+    output_dir.
+    """
+    frames, _, _ = torchvision.io.read_video(video_path)
+    frames = torchvision.transforms.functional.resize(frames, FRAME_DIMENSIONS)
+    for i in range(frames.shape[0]):
+        output_path = output_dir + "/" + str(i) + ".png"
+        torchvision.io.write_png(frames[i], output_path)
+    return frames
 
 
 def get_frames_from_dir(frame_dir):
@@ -28,7 +36,8 @@ def get_frames_from_dir(frame_dir):
     return frames
 
 
-def generate_video_flows(frames):
+def load_and_save_flows(frames, output_dir):
+    """Returns a list of optical flows between the frames."""
     frames = frames
     start_frames = frames[:-1]
     end_frames = frames[1:]
@@ -36,25 +45,28 @@ def generate_video_flows(frames):
                                                             progress=False)
     raft_model = raft_model
     raft_model = raft_model.eval()
-    return raft_model(start_frames, end_frames)
 
-
-def save_flows_in_dir(flows, output_dir):
+    flows = raft_model(start_frames, end_frames)
     for i, flow in enumerate(flows):
         output_path = output_dir + "/" + str(i) + ".png"
         torchvision.io.write_png(flow, output_path)
+    return flows
 
 
 def main():
-    input_path = "data/training/videos"
-    output_dir = "data/frames"
-    save_mp4s_as_frames(input_path, output_dir)
-    frames = get_frames_from_dir(output_dir)
+    torch.set_default_device("cuda" if torch.cuda.is_available() else "cpu")
 
-    flows = generate_video_flows(frames)
+    mp4s = get_mp4s_from_dir("data/videos/mp4s")
+    for mp4 in tqdm(mp4s):
+        video_name = mp4.split("/")[-1].split(".")[0]
+        output_frames_dir = "data/videos/frames" + video_name
+        output_flows_dir = "data/videos/flows" + video_name
+        os.mkdir(output_frames_dir)
+        os.mkdir(output_flows_dir)
 
-    output_dir = "data/flows"
-    save_flows_in_dir(flows, output_dir)
+        frames = load_and_save_frames(mp4, output_frames_dir)
+        _ = load_and_save_flows(frames, output_flows_dir)
     
+
 if __name__ == "__main__":
     main()
