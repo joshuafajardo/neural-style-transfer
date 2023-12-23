@@ -1,0 +1,5 @@
+#!/bin/bash
+
+# Clear the generated video frames and flows
+rm -rf ../../data/videos/frames/*
+rm -rf ../../data/videos/flows/*
