@@ -2,7 +2,7 @@
 
 """Tools for real-time video style transfer, following Huang et al."""
 
-__all__ = ["StylizingNetwork"]
+__all__ = ["StylizingNetwork", "LossNetwork", "RealTimeVstFactory"]
 __author__ = "joshuafajardo"
 __version__ = "0.1.0"
 
@@ -12,7 +12,20 @@ import numpy as np
 
 from tqdm import tqdm
 
-class RealTimeVstModel(tf.keras.Model):
+class RealTimeVstFactory():
+    def __init__(self, style_image, videos, optical_flows):
+        """
+        Initializes the model with a style image and a directory
+        of content videos.
+        """
+        self.loss_network = LossNetwork()
+        self.stylizing_network = StylizingNetwork()
+        self.style_image_features = self.loss_network(style_image)["style_maps"]
+        self.videos = videos
+    
+    def train_batch(self, content_videos, learning_rate=1e-3):
+        """Trains the model on a batch of content videos."""
+        pass
 
 
 class LossNetwork(tf.keras.Model):
@@ -140,3 +153,8 @@ class DeconvolutionalBlock(tf.keras.Layer):
         x = self.conv(inputs)
         x = self.instance_norm(x)
         x = self.activation(x)
+
+
+def get_videos_in_dir(video_dir):
+    """Returns a list of paths to the videos in the directory."""
+    return tf.io.gfile.glob(video_dir + "/*")

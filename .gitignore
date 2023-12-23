@@ -1,3 +1,4 @@
 .venv/
 .idea/
 **/scratchpad.py
+data/videos/*
