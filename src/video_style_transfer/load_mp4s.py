@@ -60,6 +60,7 @@ def load_and_save_flows(frames, output_dir):
     flows = raft_model(start_frames, end_frames)
     flow_images = torchvision.utils.flow_to_image(flows)
     for i, flow_image in enumerate(flow_images):
+        print(i)
         frame_num = str(i).zfill(FRAME_COUNT_FILLER)
         output_path = output_dir / f"flow_{frame_num}.png"
         torchvision.io.write_png(flow_image, str(output_path))
