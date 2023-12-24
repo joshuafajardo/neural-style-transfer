@@ -1,0 +1,12 @@
+#!/bin/bash
+
+cd ../../data/videos/mp4s
+
+rm -f scaled/*
+
+iter=0
+for video in originals/*.mp4; do
+    echo "Processing ${video}..."
+    image_name="$(printf %03d ${iter})"
+    ffmpeg -i "${video}" -vf scale=640:360 "scaled/mp4_${image_name}.mp4"
+done
