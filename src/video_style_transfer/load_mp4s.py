@@ -36,9 +36,9 @@ def load_and_save_frames(video_path, output_dir):
     """
     frames, _, _ = torchvision.io.read_video(str(video_path), pts_unit="sec",
                                              output_format="TCHW")
-    # frames = torchvision.transforms.functional.resize(frames, FRAME_DIMENSIONS)
+    frames_cpu = frames.cpu()  # In case the default device isn't CPU.
     for i in range(frames.shape[0]):
-        frame = np.array(frames[i])
+        frame = frames_cpu[i]
         frame_num = str(i).zfill(FRAME_COUNT_FILLER)
         output_path = output_dir / f"frame_{frame_num}.png"
         torchvision.io.write_png(frame, str(output_path))
