@@ -68,7 +68,8 @@ def load_and_save_flows(frames, output_dir):
 
 def clear_dir(dir):
     """Recursively clears the directory."""
-    shutil.rmtree(dir)
+    if dir.exists():
+        shutil.rmtree(dir)
     dir.mkdir(parents=True)
 
 
