@@ -16,7 +16,7 @@ FRAME_DIMENSIONS = (640, 360)
 def scale_videos(input_dir, output_dir):
     """Scales the videos in the input_dir and saves them in the output_dir."""
     mp4s = get_mp4s_from_dir(input_dir)
-    print(f"Scaling videos.")
+    print("Scaling videos.")
     for mp4 in tqdm(mp4s):
         output_path = output_dir / Path(mp4).name
         subprocess.run(
@@ -47,16 +47,20 @@ def load_and_save_frames(video_path, output_dir):
 
 def load_and_save_flows(frames, output_dir):
     """Returns a list of optical flows between the frames."""
+    print("function start")
     transforms = torchvision.models.optical_flow.Raft_Large_Weights.DEFAULT.transforms()
 
     start_frames, end_frames = frames[:-1], frames[1:]
     start_frames, end_frames = transforms(start_frames, end_frames)
+    print(start_frames.shape)
+    print(end_frames.shape)
 
     raft_model = torchvision.models.optical_flow.raft_large(pretrained=True,
                                                             progress=False)
     raft_model = raft_model
     raft_model = raft_model.eval()
 
+    print("hello world")
     flows = raft_model(start_frames, end_frames)
     flow_images = torchvision.utils.flow_to_image(flows)
     for i, flow_image in enumerate(flow_images):
