@@ -1,4 +1,4 @@
-import os
+import subprocess
 import shutil
 
 import torch
@@ -18,11 +18,15 @@ def scale_videos(input_dir, output_dir):
     print(f"Scaling videos.")
     for mp4 in tqdm(mp4s):
         output_path = output_dir / Path(mp4).name
-        os.system(f'ffmpeg -i "{mp4}" -vf scale=640:360 "{output_path.absolute().as_posix()}"')
+        subprocess.run(
+            f'ffmpeg -i "{mp4}" -vf scale=640:360 "{output_path}"',
+            capture_output=True, shell=True, check=True)
+
 
 def get_mp4s_from_dir(input_dir):
     """Returns a list of mp4s from the directory."""
     return input_dir.glob("*.mp4")
+
 
 def load_and_save_frames(video_path, output_dir):
     """
@@ -62,7 +66,7 @@ def load_and_save_flows(frames, output_dir):
 def clear_dir(dir):
     """Recursively clears the directory."""
     shutil.rmtree(dir)
-    dir.mkdir()
+    dir.mkdir(parents=True)
 
 
 def main():
