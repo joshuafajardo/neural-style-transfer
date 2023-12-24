@@ -55,13 +55,15 @@ def load_and_save_flows(frames, output_dir):
     print(start_frames.shape)
     print(end_frames.shape)
 
+    print("creating model")
     raft_model = torchvision.models.optical_flow.raft_large(pretrained=True,
                                                             progress=False)
-    raft_model = raft_model
     raft_model = raft_model.eval()
+    print("model created")
 
     print("hello world")
     flows = raft_model(start_frames, end_frames)
+    print(len(flows))
     flow_images = torchvision.utils.flow_to_image(flows)
     print(len(flow_images))
     for i, flow_image in enumerate(flow_images):
