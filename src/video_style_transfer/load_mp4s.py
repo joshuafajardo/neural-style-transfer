@@ -1,6 +1,7 @@
 import subprocess
 import shutil
 
+import numpy as np
 import torch
 import torchvision
 
@@ -37,9 +38,10 @@ def load_and_save_frames(video_path, output_dir):
                                              output_format="TCHW")
     # frames = torchvision.transforms.functional.resize(frames, FRAME_DIMENSIONS)
     for i in range(frames.shape[0]):
+        frame = np.array(frames[i])
         frame_num = str(i).zfill(FRAME_COUNT_FILLER)
         output_path = output_dir / f"frame_{frame_num}.png"
-        torchvision.io.write_png(frames[i], str(output_path))
+        torchvision.io.write_png(frame, str(output_path))
     return frames
 
 
