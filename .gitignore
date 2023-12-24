@@ -1,4 +1,9 @@
 .venv/
 .idea/
 **/scratchpad.py
-data/videos/*
+data/videos/flows/*
+data/videos/frames/*
+data/videos/mp4s/originals/*
+data/videos/mp4s/scaled/*
+
+!*.git*
