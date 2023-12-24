@@ -56,7 +56,7 @@ def load_and_save_flows(frames, output_dir):
     print(end_frames.shape)
 
     print("creating model")
-    raft_model = torchvision.models.optical_flow.raft_large(pretrained=True,
+    raft_model = torchvision.models.optical_flow.raft_large(weights="DEFAULT",
                                                             progress=False)
     raft_model = raft_model.eval()
     print("model created")
