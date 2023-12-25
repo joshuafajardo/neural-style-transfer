@@ -20,7 +20,7 @@ def scale_videos(input_dir, output_dir):
     for mp4 in tqdm(mp4s):
         output_path = output_dir / Path(mp4).name
         subprocess.run(
-            f'ffmpeg -i "{mp4}" -vf scale=640:360 "{output_path}"',
+            f'ffmpeg -i "{mp4}" -vf scale=128:128 "{output_path}"',
             capture_output=True, shell=True, check=True)
 
 
@@ -35,6 +35,7 @@ def load_and_save_frames(video_path, output_dir):
     output_dir.
     """
     frames, _, _ = torchvision.io.read_video(str(video_path), pts_unit="sec",
+                                             end_pts=1,
                                              output_format="TCHW")
     frames_cpu = frames.cpu()  # In case the default device isn't CPU.
     for i in range(frames.shape[0]):
@@ -56,18 +57,15 @@ def load_and_save_flows(frames, output_dir):
     print(end_frames.shape)
 
     print("creating model")
-    raft_model = torchvision.models.optical_flow.raft_large(weights="DEFAULT",
-                                                            progress=False)
-    raft_model = raft_model.eval()
+    raft_model = torchvision.models.optical_flow.raft_large(weights="DEFAULT")
+    raft_model.eval()
     print("model created")
 
     print("hello world")
-    flows = raft_model(start_frames, end_frames)
-    print(len(flows))
-    flow_images = torchvision.utils.flow_to_image(flows)
-    print(len(flow_images))
-    for i, flow_image in enumerate(flow_images):
-        print(i)
+    flows = raft_model(start_frames, end_frames)[-1]
+    for i in range(flows.shape[0]):
+        flow_image = torchvision.utils.flow_to_image(flows[i])
+        print(flow_image.shape)
         frame_num = str(i).zfill(FRAME_COUNT_FILLER)
         output_path = output_dir / f"flow_{frame_num}.png"
         torchvision.io.write_png(flow_image, str(output_path))
