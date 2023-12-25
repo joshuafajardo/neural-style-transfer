@@ -11,22 +11,26 @@ from tqdm import tqdm
 
 FRAME_COUNT_FILLER = 8
 FRAME_DIMENSIONS = (640, 360)
+SUPPORTED_VIDEO_EXTENSIONS = ["mp4", "mov"]
 
 
 def scale_videos(input_dir, output_dir):
-    """Scales the videos in the input_dir and saves them in the output_dir."""
-    mp4s = get_mp4s_from_dir(input_dir)
-    print("Scaling videos.")
-    for mp4 in tqdm(mp4s):
-        output_path = output_dir / Path(mp4).name
-        subprocess.run(
-            f'ffmpeg -i "{mp4}" -vf scale=128:128 "{output_path}"',
-            capture_output=True, shell=True, check=True)
+    """
+    Scales the videos in the input_dir and saves them as mp4s in the
+    output_dir.
+    """
+    for extension in SUPPORTED_VIDEO_EXTENSIONS:
+        videos = get_video_paths_from_dir(input_dir, extension)
+        for video in tqdm(videos):
+            output_path = output_dir / f"{Path(video).stem}.mp4"
+            subprocess.run(
+                f'ffmpeg -i "{video}" -vf scale=128:128 "{output_path}"',
+                stdout=subprocess.PIPE, shell=True, check=True)
 
 
-def get_mp4s_from_dir(input_dir):
-    """Returns a list of mp4s from the directory."""
-    return input_dir.glob("*.mp4")
+def get_video_paths_from_dir(input_dir, extension="mp4"):
+    """Returns a list of videos from the directory."""
+    return input_dir.glob(f"*.{extension}")
 
 
 def load_and_save_frames(video_path, output_dir):
@@ -84,10 +88,10 @@ def main():
 
     project_root = Path(__file__).resolve().parents[2]
 
-    originals_mp4s_dir = project_root / "data/videos/mp4s/originals"
-    scaled_mp4s_dir = project_root / "data/videos/mp4s/scaled"
-    clear_dir(scaled_mp4s_dir)
-    scale_videos(originals_mp4s_dir, scaled_mp4s_dir)
+    original_videos_dir = project_root / "data/videos/original"
+    scaled_videos_dir = project_root / "data/videos/scaled"
+    clear_dir(scaled_videos_dir)
+    scale_videos(original_videos_dir, scaled_videos_dir)
 
     frame_dir = project_root / "data/videos/frames"
     flow_dir = project_root / "data/videos/flows"
@@ -95,16 +99,16 @@ def main():
     clear_dir(flow_dir)
 
 
-    mp4s = get_mp4s_from_dir(project_root / "data/videos/mp4s/scaled")
+    videos = get_video_paths_from_dir(project_root / "data/videos/scaled")
     print("Saving frames and flows.")
-    for mp4 in tqdm(mp4s):
-        video_name = Path(mp4).stem
+    for video in tqdm(videos):
+        video_name = Path(video).stem
         output_frames_dir = frame_dir / video_name
         output_flows_dir = flow_dir / video_name
         output_frames_dir.mkdir()
         output_flows_dir.mkdir()
 
-        frames = load_and_save_frames(mp4, output_frames_dir)
+        frames = load_and_save_frames(video, output_frames_dir)
         _ = load_and_save_flows(frames, output_flows_dir)
 
 
