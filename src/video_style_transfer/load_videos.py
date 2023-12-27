@@ -1,9 +1,19 @@
+# load_videos.py
+
+"""Loads and prepares the videos for training."""
+
+__all__ = ["load_image", "process_videos", "load_prepared_videos"]
+__author__ = "joshuafajardo"
+__version__ = "0.1.0"
+
 import subprocess
 import shutil
 
 import numpy as np
 import torch
 import torchvision
+
+import tensorflow as tf
 
 from pathlib import Path
 from tqdm import tqdm
@@ -12,6 +22,65 @@ from tqdm import tqdm
 FRAME_COUNT_FILLER = 8
 FRAME_DIMENSIONS = (640, 360)
 SUPPORTED_VIDEO_EXTENSIONS = ["mp4", "mov"]
+
+# Relative directories
+REL_FRAME_DIR = "data/videos/frames"
+REL_FLOWS_DIR = "data/videos/flows"
+REL_ORIGINAL_DIR = "data/videos/original"
+REL_SCALED_DIR = "data/videos/scaled"
+
+FRAMES_FILE = "frames.npy"
+FLOWS_FILE = "flows.npy"
+
+
+def load_image(image_path):
+    """Loads an image from the given path."""
+    image = tf.keras.utils.load_img(str(image_path))
+    return tf.keras.utils.img_to_array(image)
+
+
+def load_prepared_videos(project_root):
+    """Loads the prepared videos from the project root."""
+    frame_dir = project_root / REL_FRAME_DIR
+    flow_dir = project_root / REL_FLOWS_DIR
+    frames = {}
+    flows = {}
+    for dir in frame_dir.glob("*/"):
+        video_name = dir.stem
+
+        curr_frames = np.load(frame_dir / video_name / FRAMES_FILE)
+        curr_flows = np.load(flow_dir / video_name / FLOWS_FILE)
+
+        frames[video_name] = tf.convert_to_tensor(curr_frames)
+        flows[video_name] = tf.convert_to_tensor(curr_flows)
+    return frames, flows
+
+
+def process_videos(project_root):
+    torch.set_default_device("cuda" if torch.cuda.is_available() else "cpu")
+
+    original_videos_dir = project_root / REL_ORIGINAL_DIR
+    scaled_videos_dir = project_root / REL_SCALED_DIR
+    clear_dir(scaled_videos_dir)
+    scale_videos(original_videos_dir, scaled_videos_dir)
+
+    frame_dir = project_root / REL_FRAME_DIR
+    flow_dir = project_root / REL_FLOWS_DIR
+    clear_dir(frame_dir)
+    clear_dir(flow_dir)
+
+
+    videos = get_video_paths_from_dir(scaled_videos_dir)
+    print("Saving frames and flows.")
+    for video in tqdm(videos):
+        video_name = Path(video).stem
+        output_frames_dir = frame_dir / video_name
+        output_flows_dir = flow_dir / video_name
+        output_frames_dir.mkdir()
+        output_flows_dir.mkdir()
+
+        frames = generate_and_save_frames(video, output_frames_dir)
+        _ = generate_and_save_flows(frames, output_flows_dir)
 
 
 def scale_videos(input_dir, output_dir):
@@ -24,8 +93,10 @@ def scale_videos(input_dir, output_dir):
         for video in tqdm(videos):
             output_path = output_dir / f"{Path(video).stem}.mp4"
             subprocess.run(
-                f'ffmpeg -i "{video}" -vf scale=128:128 "{output_path}"',
-                stdout=subprocess.PIPE, shell=True, check=True)
+                f'ffmpeg -i "{video}" -vf ' + 
+                f'scale={FRAME_DIMENSIONS[0]}:{FRAME_DIMENSIONS[1]} ' +
+                f'"{output_path}"',
+                capture_output=True, shell=True, check=True)
 
 
 def get_video_paths_from_dir(input_dir, extension="mp4"):
@@ -33,46 +104,43 @@ def get_video_paths_from_dir(input_dir, extension="mp4"):
     return input_dir.glob(f"*.{extension}")
 
 
-def load_and_save_frames(video_path, output_dir):
+def generate_and_save_frames(video_path, output_dir):
     """
     Loads and saves the frames of the video as pngs in the
     output_dir.
+    Videos are loaded as tensors of shape (T, H, W, C), with values
+    in the range [0, 255].
     """
     frames, _, _ = torchvision.io.read_video(str(video_path), pts_unit="sec",
                                              end_pts=1,
-                                             output_format="TCHW")
-    frames_cpu = frames.cpu()  # In case the default device isn't CPU.
+                                             output_format="THWC")
     for i in range(frames.shape[0]):
-        frame = frames_cpu[i]
         frame_num = str(i).zfill(FRAME_COUNT_FILLER)
         output_path = output_dir / f"frame_{frame_num}.png"
-        torchvision.io.write_png(frame, str(output_path))
+        frame_as_image = torch.permute(frames[i], (2, 0, 1))
+        torchvision.io.write_png(frame_as_image.cpu(), str(output_path))
+    np.save(output_dir / FRAMES_FILE, frames.cpu().detach().numpy())
     return frames
 
 
-def load_and_save_flows(frames, output_dir):
+def generate_and_save_flows(frames, output_dir):
     """Returns a list of optical flows between the frames."""
-    print("function start")
     transforms = torchvision.models.optical_flow.Raft_Large_Weights.DEFAULT.transforms()
 
     start_frames, end_frames = frames[:-1], frames[1:]
     start_frames, end_frames = transforms(start_frames, end_frames)
-    print(start_frames.shape)
-    print(end_frames.shape)
 
-    print("creating model")
     raft_model = torchvision.models.optical_flow.raft_large(weights="DEFAULT")
     raft_model.eval()
-    print("model created")
 
-    print("hello world")
     flows = raft_model(start_frames, end_frames)[-1]
     for i in range(flows.shape[0]):
         flow_image = torchvision.utils.flow_to_image(flows[i])
-        print(flow_image.shape)
         frame_num = str(i).zfill(FRAME_COUNT_FILLER)
         output_path = output_dir / f"flow_{frame_num}.png"
         torchvision.io.write_png(flow_image, str(output_path))
+    np.save(output_dir / FLOWS_FILE, flows.cpu().detach().numpy())
+    print(flows)
     return flows
 
 
@@ -83,34 +151,6 @@ def clear_dir(dir):
     dir.mkdir(parents=True)
 
 
-def main():
-    torch.set_default_device("cuda" if torch.cuda.is_available() else "cpu")
-
-    project_root = Path(__file__).resolve().parents[2]
-
-    original_videos_dir = project_root / "data/videos/original"
-    scaled_videos_dir = project_root / "data/videos/scaled"
-    clear_dir(scaled_videos_dir)
-    scale_videos(original_videos_dir, scaled_videos_dir)
-
-    frame_dir = project_root / "data/videos/frames"
-    flow_dir = project_root / "data/videos/flows"
-    clear_dir(frame_dir)
-    clear_dir(flow_dir)
-
-
-    videos = get_video_paths_from_dir(project_root / "data/videos/scaled")
-    print("Saving frames and flows.")
-    for video in tqdm(videos):
-        video_name = Path(video).stem
-        output_frames_dir = frame_dir / video_name
-        output_flows_dir = flow_dir / video_name
-        output_frames_dir.mkdir()
-        output_flows_dir.mkdir()
-
-        frames = load_and_save_frames(video, output_frames_dir)
-        _ = load_and_save_flows(frames, output_flows_dir)
-
-
 if __name__ == "__main__":
-    main()
+    project_root = Path(__file__).resolve().parents[2]
+    process_videos(project_root)
