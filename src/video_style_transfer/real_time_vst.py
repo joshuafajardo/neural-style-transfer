@@ -14,61 +14,129 @@ from tqdm import tqdm
 
 class RealTimeVstFactory():
     def __init__(self, style_image, frames, flows, content_loss_weight=1,
-                 style_loss_weight=1, total_variation_loss_weight=1):
+                 style_loss_weight=10, temporal_weight=1e4,
+                 total_variation_loss_weight=1e-3):
         """
         Initializes the model with a style image and a directory
         of content videos.
+
+        style_image: tf.Tensor, shape [height, width, channels]
+        frames: dict, where the keys are the video names and the values are
+            tf.Tensors of shape [num_frames, height, width, channels]
+        flows: dict, where the keys are the video names and the values are
+            tf.Tensors of shape [num_frames - 1, height, width, 2]
+        content_loss_weight: int/float
+        style_loss_weight: int/float
+        temporal_weight: int/float
+        total_variation_loss_weight: int/float
         """
         self.loss_network = LossNetwork()
         self.stylizing_network = StylizingNetwork()
+        style_image = tf.expand_dims(style_image, axis=0)
         self.target_style_features = self.loss_network(style_image)["style_maps"]
         self.frames = frames
         self.flows = flows
         self.content_loss_weight = content_loss_weight
         self.style_loss_weight = style_loss_weight
+        self.temporal_weight = temporal_weight
         self.total_variation_loss_weight = total_variation_loss_weight
     
-    def train_batch(self, content_videos, learning_rate=1e-3):
-        """Trains the model on a batch of content videos."""
-        pass
-
-    def calc_spatial_loss(self, content_frame, generated_frame):
-        """Calculates the spatial for the generated frame."""
-        content_loss = self.content_loss_weight \
-            * self.calc_content_loss(content_frame, generated_frame)
-        style_loss = self.style_loss_weight \
-            * self.calc_style_loss(generated_frame)
-        total_variation_loss = self.total_variation_loss_weight \
-            * self.calc_total_variation_regularizer(generated_frame)
-
-    def calc_content_loss(self, content_frame, generated_frame):
+    def train(self, epochs=2, learning_rate=1e-3):
+        """Trains the model on the content videos."""
+        optimizer = tf.keras.optimizers.Adam(learning_rate=learning_rate)
+        # Unlike in the paper, we count the number of epochs instead of the
+        # number of iterations.
+        for epoch in range(epochs):
+            print(f"Epoch {epoch + 1}/{epochs}")
+            for video_name in tqdm(self.frames.keys()):
+                self.train_video(video_name, optimizer)
+    
+    def train_video(self, video_name, optimizer):
         """
-        Calculates the content loss between content and stylized
-        frames summed across all layers.
+        Trains the model on the frames of the video.
+
+        In the paper, the authors train on a batch of 2 frames at a
+        time. We constrain our training capabilities similarly.
         """
-        target_features = self.loss_network(content_frame)["content_maps"]
-        generated_features = self.loss_network(generated_frame)["content_maps"]
-        total_loss = 0
+        frames = self.frames[video_name]
+        flows = self.flows[video_name]
+        num_frames = frames.shape[0]
+        for frame_num in range(num_frames - 1):
+            content_frames = frames[frame_num : frame_num + 2]
+            flow = flows[frame_num]
+            with tf.GradientTape() as tape:
+                generated_frames = self.stylizing_network(content_frames)  # TODO verify that this works; we're relying on batch-ing
+                spatial_losses = self.calc_spatial_losses(content_frames, generated_frames)
+                temporal_loss = self.calc_temporal_loss(generated_frames, flow)
+                total_loss = tf.reduce_sum(spatial_losses) + temporal_loss
+            grads = tape.gradient(total_loss, self.stylizing_network.trainable_variables)
+            optimizer.apply_gradients(zip(grads, self.stylizing_network.trainable_variables))
+    
+    def calc_temporal_loss(self, generated_frames, flow):
+        """
+        Calculates the temporal loss between two generated frames,
+        given the flow between their original content frames.
+        
+        generated_frames: tf.Tensor, shape [2, height, width, channels]
+        flow: tf.Tensor, shape [height, width, 2]
+        """
+        return 0  # TODO
+
+
+    def calc_spatial_losses(self, content_frames, generated_frames):
+        """
+        Calculates the spatial losses for the generated frames.
+
+        content_frames: tf.Tensor, shape [batch_size, height, width, channels]
+        generated_frames: tf.Tensor shape [batch_size, height, width, channels]
+        """
+        content_losses = self.content_loss_weight \
+            * self.calc_content_losses(content_frames, generated_frames)  # TODO make sure that these are vectorized
+        style_losses = self.style_loss_weight \
+            * self.calc_style_losses(generated_frames)
+        total_variation_losses = self.total_variation_loss_weight \
+            * self.calc_total_variation_regularizers(generated_frames)
+
+        return content_losses + style_losses + total_variation_losses
+
+    def calc_content_losses(self, content_frames, generated_frames):
+        """
+        Calculates the content loss for each sample between the
+        content and stylized frames, summed across all layers.
+
+        content_frames: tf.Tensor, shape [batch_size, height, width, channels]
+        generated_frames: tf.Tensor, shape [batch_size, height, width, channels]
+        """
+        target_features = self.loss_network(content_frames)["content_maps"]
+        generated_features = self.loss_network(generated_frames)["content_maps"]
+        total_losses = tf.zeros(generated_frames.shape[0])
         for layer in range(len(target_features)):
-            layer_loss = tf.reduce_sum(
-                tf.square(target_features[layer] - generated_features[layer]))
-            layer_loss = layer_loss / tf.reduce_prod(
+            layer_losses = tf.reduce_sum(
+                tf.square(target_features[layer] - generated_features[layer]),  # TODO Not sure if this is right
+                axis=(1, 2, 3))
+            layer_losses = layer_losses / tf.reduce_prod(
                 tf.shape(target_features[layer])[1:])
-            total_loss = total_loss + layer_loss
-        return total_loss
+            total_losses = total_losses + layer_losses
+        return total_losses
 
-    def calc_style_loss(self, generated_frames):
+    def calc_style_losses(self, generated_frames):
+        """
+        Calculates the style loss for each generated sample, summed
+        across all layers.
+        
+        generated_frames: tf.Tensor, shape [batch_size, height, width, channels]
+        """
         generated_features = self.loss_network(generated_frames)["style_maps"]
-        total_loss = 0
+        total_losses = tf.zeros(generated_frames.shape[0])
         for layer in range(len(self.target_style_features)):
             num_maps = generated_features[layer].shape[3]
-            diffs = self.target_style_features[layer] - generated_features[layer]
-            layer_loss = tf.reduce_sum(tf.square(diffs))
-            layer_loss = layer_loss / (num_maps ** 2)
-            total_loss = total_loss + layer_loss
-        return total_loss
+            diffs = self.target_style_features[layer] - generated_features[layer]  # TODO not sure if this is right
+            layer_losses = tf.reduce_sum(tf.square(diffs), axis=(1, 2, 3))
+            layer_losses = layer_losses / (num_maps ** 2)
+            total_losses = total_losses + layer_losses
+        return total_losses
     
-    def calc_total_variation_regularizer(self, generated_frames):
+    def calc_total_variation_regularizers(self, generated_frames):
         """
         Calculates the total variation regularizer for the generated
         frames.
@@ -82,9 +150,8 @@ class RealTimeVstFactory():
         horizontal_diffs = tf.square(horizontal_diffs)
         vertical_diffs = tf.square(vertical_diffs)
 
-        return tf.reduce_sum(tf.sqrt(horizontal_diffs + vertical_diffs))
-
-        
+        return tf.reduce_sum(tf.sqrt(horizontal_diffs + vertical_diffs),
+                             axis=(1, 2, 3))
 
 
 class LossNetwork(tf.keras.Model):
@@ -156,13 +223,14 @@ class StylizingNetwork(tf.keras.Model):
         self.conv3 = ConvolutionalBlock(kernel_size=3, strides=2, channels=48, activation="relu")
         self.res4 = ResidualBlock()
         self.res5 = ResidualBlock()
-        self.deconv6 = DeconvolutionalBlock(kernel_size=3, strides=0.5, channels=32, activation="relu")
-        self.deconv7 = DeconvolutionalBlock(kernel_size=3, strides=0.5, channels=16, activation="relu")
+        self.deconv6 = DeconvolutionalBlock(kernel_size=3, strides=2, channels=32, activation="relu")
+        self.deconv7 = DeconvolutionalBlock(kernel_size=3, strides=2, channels=16, activation="relu")
         self.conv8 = ConvolutionalBlock(kernel_size=3, strides=1, channels=3, activation="tanh")
 
     def call(self, inputs):
         # Input: [batch_size, height, width, channels]
         # Pixel values should be in [0, 1].
+        print("original shape: ", x.shape)
         x = self.conv1(inputs)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -172,9 +240,10 @@ class StylizingNetwork(tf.keras.Model):
         x = self.deconv7(x)
         x = self.conv8(x)
         x = tf.clip_by_value(x, 0, 1)
+        print("final shape: ", x.shape)
         return x
 
-class ResidualBlock(tf.keras.Layer):
+class ResidualBlock(tf.keras.layers.Layer):
     def __init__(self):
         super().__init__()
         self.conv1 = ConvolutionalBlock(kernel_size=3, strides=1, channels=48, activation="relu")
@@ -185,7 +254,7 @@ class ResidualBlock(tf.keras.Layer):
         x = self.conv2(x)
         return x
 
-class ConvolutionalBlock(tf.keras.Layer):
+class ConvolutionalBlock(tf.keras.layers.Layer):
     def __init__(self, kernel_size, strides, channels, padding="same", activation=None):
         # "Conv denotes the convolutional block (convolutional layer + instance
         # normalization + activation)"
@@ -201,7 +270,7 @@ class ConvolutionalBlock(tf.keras.Layer):
         x = self.activation(x)
         return x
 
-class DeconvolutionalBlock(tf.keras.Layer):
+class DeconvolutionalBlock(tf.keras.layers.Layer):
     def __init__(self, kernel_size, strides, channels, padding="same", activation=None):
         super().__init__()
         self.conv = tf.keras.layers.Conv2DTranspose(channels, kernel_size, strides=strides, padding=padding)

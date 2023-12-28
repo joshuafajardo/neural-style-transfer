@@ -46,7 +46,7 @@ def load_prepared_videos(project_root):
     frames = {}
     flows = {}
     for dir in frame_dir.glob("*/"):
-        video_name = dir.stem
+        video_name = dir.name
 
         curr_frames = np.load(frame_dir / video_name / FRAMES_FILE)
         curr_flows = np.load(flow_dir / video_name / FLOWS_FILE)
@@ -127,6 +127,8 @@ def generate_and_save_flows(frames, output_dir):
     """Returns a list of optical flows between the frames."""
     transforms = torchvision.models.optical_flow.Raft_Large_Weights.DEFAULT.transforms()
 
+    frames = frames.permute(0, 3, 1, 2)  # (T, H, W, C) -> (T, C, H, W)
+
     start_frames, end_frames = frames[:-1], frames[1:]
     start_frames, end_frames = transforms(start_frames, end_frames)
 
@@ -139,8 +141,8 @@ def generate_and_save_flows(frames, output_dir):
         frame_num = str(i).zfill(FRAME_COUNT_FILLER)
         output_path = output_dir / f"flow_{frame_num}.png"
         torchvision.io.write_png(flow_image, str(output_path))
+    flows.permute(0, 2, 3, 1)  # (T, C, H, W) -> (T, H, W, C)
     np.save(output_dir / FLOWS_FILE, flows.cpu().detach().numpy())
-    print(flows)
     return flows
 
 
