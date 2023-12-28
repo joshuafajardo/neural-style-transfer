@@ -35,7 +35,11 @@ class RealTimeVstFactory():
         self.loss_network = LossNetwork()
         self.stylizing_network = StylizingNetwork()
         style_image = tf.cast(tf.expand_dims(style_image, axis=0), FLOAT_TYPE)
-        self.target_style_features = self.loss_network(style_image)["style_maps"]  # TODO Need to turn these into Gram matrices
+
+        self.target_style_features = self.loss_network(style_image)["style_maps"]
+        for i in range(len(self.target_style_features)):
+            self.target_style_features[i] = self.calc_gram_matrices(self.target_style_features[i])
+
         self.frames = self.cast_dict_values(frames, FLOAT_TYPE)
         self.flows = self.cast_dict_values(flows, FLOAT_TYPE)
         self.content_loss_weight = tf.cast(content_loss_weight, FLOAT_TYPE)
@@ -136,12 +140,13 @@ class RealTimeVstFactory():
         generated_frames: tf.Tensor, shape [batch_size, height, width, channels]
         """
         generated_maps = self.loss_network(generated_frames)["style_maps"]
-        generated_gram_matrices = self.calc_gram_matrices(generated_maps)  # TODO fix this. Most urgent, most likely to be wrong
         total_losses = tf.zeros(generated_frames.shape[0])
         for layer in range(len(self.target_style_features)):
-            num_maps = generated_maps[layer].shape[-1]
-            diffs = self.target_style_features[layer] - generated_gram_matrices[layer]  # TODO not sure if this is right
-            layer_losses = tf.reduce_sum(tf.square(diffs), axis=(1, 2, 3))
+            num_maps = generated_maps[layer].shape[3]
+            generated_gram_matrices = self.calc_gram_matrices(
+                generated_maps[layer])
+            diffs = self.target_style_features[layer] - generated_gram_matrices
+            layer_losses = tf.reduce_sum(tf.square(diffs), axis=(1, 2))
             layer_losses = layer_losses / (num_maps ** 2)
             total_losses = total_losses + layer_losses
         return total_losses
