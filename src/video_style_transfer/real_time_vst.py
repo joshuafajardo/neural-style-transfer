@@ -12,6 +12,8 @@ import numpy as np
 
 from tqdm import tqdm
 
+FLOAT_TYPE = tf.keras.backend.floatx()
+
 class RealTimeVstFactory():
     def __init__(self, style_image, frames, flows, content_loss_weight=1,
                  style_loss_weight=10, temporal_weight=1e4,
@@ -32,14 +34,21 @@ class RealTimeVstFactory():
         """
         self.loss_network = LossNetwork()
         self.stylizing_network = StylizingNetwork()
-        style_image = tf.expand_dims(style_image, axis=0)
+        style_image = tf.cast(tf.expand_dims(style_image, axis=0), FLOAT_TYPE)
         self.target_style_features = self.loss_network(style_image)["style_maps"]
-        self.frames = frames
-        self.flows = flows
-        self.content_loss_weight = content_loss_weight
-        self.style_loss_weight = style_loss_weight
-        self.temporal_weight = temporal_weight
-        self.total_variation_loss_weight = total_variation_loss_weight
+        self.frames = self.cast_dict_values(frames, FLOAT_TYPE)
+        self.flows = self.cast_dict_values(flows, FLOAT_TYPE)
+        self.content_loss_weight = tf.cast(content_loss_weight, FLOAT_TYPE)
+        self.style_loss_weight = tf.cast(style_loss_weight, FLOAT_TYPE)
+        self.temporal_weight = tf.cast(temporal_weight, FLOAT_TYPE)
+        self.total_variation_loss_weight = tf.cast(total_variation_loss_weight, FLOAT_TYPE)
+    
+    @staticmethod
+    def cast_dict_values(dictionary, dtype):
+        dictionary = dictionary.copy()
+        for key in dictionary.keys():
+            dictionary[key] = tf.cast(dictionary[key], dtype)
+        return dictionary
     
     def train(self, epochs=2, learning_rate=1e-3):
         """Trains the model on the content videos."""
@@ -229,8 +238,8 @@ class StylizingNetwork(tf.keras.Model):
 
     def call(self, inputs):
         # Input: [batch_size, height, width, channels]
-        # Pixel values should be in [0, 1].
-        print("original shape: ", x.shape)
+        # Pixel values should be in [0, 255].
+        print("original shape: ", inputs.shape)
         x = self.conv1(inputs)
         x = self.conv2(x)
         x = self.conv3(x)
@@ -239,7 +248,7 @@ class StylizingNetwork(tf.keras.Model):
         x = self.deconv6(x)
         x = self.deconv7(x)
         x = self.conv8(x)
-        x = tf.clip_by_value(x, 0, 1)
+        x = tf.clip_by_value(x, 0, 255)
         print("final shape: ", x.shape)
         return x
 
@@ -247,7 +256,7 @@ class ResidualBlock(tf.keras.layers.Layer):
     def __init__(self):
         super().__init__()
         self.conv1 = ConvolutionalBlock(kernel_size=3, strides=1, channels=48, activation="relu")
-        self.conv2 = ConvolutionalBlock(kernel_size=3, strides=1, channels=48, activation=None)
+        self.conv2 = ConvolutionalBlock(kernel_size=3, strides=1, channels=48, activation="linear")
 
     def call(self, inputs):
         x = self.conv1(inputs)
@@ -255,14 +264,13 @@ class ResidualBlock(tf.keras.layers.Layer):
         return x
 
 class ConvolutionalBlock(tf.keras.layers.Layer):
-    def __init__(self, kernel_size, strides, channels, padding="same", activation=None):
+    def __init__(self, kernel_size, strides, channels, padding="same", activation="linear"):
         # "Conv denotes the convolutional block (convolutional layer + instance
         # normalization + activation)"
         super().__init__()
         self.conv = tf.keras.layers.Conv2D(channels, kernel_size, strides=strides, padding=padding)
         self.instance_norm = tf.keras.layers.Normalization(axis=(0, 3))  # TODO: Check
-        if activation != None:
-            self.activation = tf.keras.layers.Activation(activation)
+        self.activation = tf.keras.layers.Activation(activation)
 
     def call(self, inputs):
         x = self.conv(inputs)
@@ -271,7 +279,7 @@ class ConvolutionalBlock(tf.keras.layers.Layer):
         return x
 
 class DeconvolutionalBlock(tf.keras.layers.Layer):
-    def __init__(self, kernel_size, strides, channels, padding="same", activation=None):
+    def __init__(self, kernel_size, strides, channels, padding="same", activation="linear"):
         super().__init__()
         self.conv = tf.keras.layers.Conv2DTranspose(channels, kernel_size, strides=strides, padding=padding)
         self.instance_norm = tf.keras.layers.Normalization(axis=(0, 3))
@@ -281,6 +289,7 @@ class DeconvolutionalBlock(tf.keras.layers.Layer):
         x = self.conv(inputs)
         x = self.instance_norm(x)
         x = self.activation(x)
+        return x
 
 
 def load_image(image_path):

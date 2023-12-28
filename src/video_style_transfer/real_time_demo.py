@@ -14,4 +14,11 @@ style_image = load_image(project_root / "data/style/starry-night.jpg")
 
 frames, flows = load_prepared_videos(project_root)
 
-RealTimeVstFactory(style_image, frames, flows)
+factory = RealTimeVstFactory(style_image, frames, flows)
+
+factory.train()
+
+factory.stylizing_network.summary()
+
+factory.stylizing_network(list(frames.values())[0][0:1])
+
