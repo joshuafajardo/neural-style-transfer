@@ -1,7 +1,8 @@
 # Neural Style Transfer
-
-<img src="data/content/berkeley.jpg" alt="UC Berkeley" height="256px" width="341px" style="display:inline-block;"/>
-<img src="generated/base-nst/berkeley-starry_night.png" alt="UC Berkeley styled with Starry Night" style="display:inline-block;"/>
+<div class="container"/>
+    <img src="data/content/berkeley.jpg" alt="UC Berkeley" height="256px" width="341px"/>
+    <img src="generated/base-nst/berkeley-starry_night.png" alt="UC Berkeley styled with Starry Night"/>
+<\div>
 <!-- ![UC Berkeley styled with starry night](generated/base-nst/berkeley-starry_night.png) -->
 <!-- ![neckarfront styled with starry night](generated/base-nst/neckarfront-starry_night-avg_pooling.png) -->
 
