@@ -1,5 +1,5 @@
 # Neural Style Transfer
-<div class="container"/>
+<div class="container" style="margin: auto;"/>
     <img src="data/content/berkeley.jpg" alt="UC Berkeley" height="256px" width="341px"/>
     <img src="generated/base-nst/berkeley-starry_night.png" alt="UC Berkeley styled with Starry Night"/>
 </div>
